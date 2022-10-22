@@ -155,7 +155,7 @@ void fastCDC_init(void);
 int (*chunking) (unsigned char*p, int n);
 
 // origin fastcdc function
-int cdc_origin_64(unsigned char *p, int n);
+uint16_t cdc_origin_64(unsigned char *p, int n);
 
 // fastcdc with once rolling 2 bytes 
 int rolling_data_2byes_64(unsigned char *p, int n);
