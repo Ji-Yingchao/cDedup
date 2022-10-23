@@ -18,27 +18,6 @@
 
 // <SHA1 20B, ContainerNumber 2B, offset 4B, size 2B, ContainerInnerIndex 2B>
 #define META_DATA_SIZE 30
-class Chunk{
-    private:
-        uint8_t fingerprint[SHA_DIGEST_LENGTH];
-        uint16_t ContainerNumber;
-        uint32_t ContainerInnerOffset;
-        uint16_t size;
-        uint16_t ContainerInnerIndex;
-    public:
-        Chunk(){}
-        uint16_t getSize(){return size;}
-        uint16_t getConNum(){return ContainerNumber;}
-        uint32_t getInnerOffset(){return ContainerInnerOffset;}
-        uint8_t* getFingerprint(){return fingerprint;}
-        void initWithCompact(unsigned char*);
-        void initWithValue(unsigned char*,uint16_t,uint32_t,uint16_t,uint16_t);
-        std::string getDataFromDisk();
-        void saveToDisk();
-        static unsigned char restore_container_buf[CONTAINER_SIZE];
-        static Chunk* lookupChunkMeta(const unsigned char*);
-};
-unsigned char Chunk::restore_container_buf[CONTAINER_SIZE] = {0};
 
 char* fingerprintsFilePath = "/home/cyf/lab2/cDedup/fingerprints.meta";
 char* fileRecipesPath = "/home/cyf/lab2/cDedup/FileRecipes";
@@ -75,6 +54,28 @@ bool streamCmp(const unsigned char* s1, const unsigned char* s2, int len){
             return false;
     return true;
 }
+// class chunk START ---
+class Chunk{
+    private:
+        uint8_t fingerprint[SHA_DIGEST_LENGTH];
+        uint16_t ContainerNumber;
+        uint32_t ContainerInnerOffset;
+        uint16_t size;
+        uint16_t ContainerInnerIndex;
+    public:
+        Chunk(){}
+        uint16_t getSize(){return size;}
+        uint16_t getConNum(){return ContainerNumber;}
+        uint32_t getInnerOffset(){return ContainerInnerOffset;}
+        uint8_t* getFingerprint(){return fingerprint;}
+        void initWithCompact(unsigned char*);
+        void initWithValue(unsigned char*,uint16_t,uint32_t,uint16_t,uint16_t);
+        std::string getDataFromDisk();
+        void saveToDisk();
+        static unsigned char restore_container_buf[CONTAINER_SIZE];
+        static Chunk* lookupChunkMeta(const unsigned char*);
+};
+unsigned char Chunk::restore_container_buf[CONTAINER_SIZE] = {0};
 
 Chunk* Chunk::lookupChunkMeta(const unsigned char* new_hash){
     int fd = open(fingerprintsFilePath, O_RDONLY);
@@ -148,6 +149,7 @@ std::string Chunk::getDataFromDisk(){
     close(fd);
     return std::string((char*)Chunk::restore_container_buf + this->ContainerInnerOffset, this->size);
 }
+// ---class chunk END
 
 unsigned int getFileSize(char* file_path){
     int fd = open(file_path, O_RDONLY, 777);
@@ -376,11 +378,6 @@ int main(int argc, char** argv){
             Chunk* search_chunk = Chunk::lookupChunkMeta(SHA_buf);
             //printf("%d %d\n", container_index, container_inner_offset);
             if(search_chunk == nullptr){
-                // insert meta data
-                Chunk new_chunk;
-                new_chunk.initWithValue(SHA_buf, container_index, container_inner_offset, chunk_length, container_inner_index);
-                new_chunk.saveToDisk();
-                
                 // file recipe
                 file_recipe.push_back(std::string((char*)SHA_buf, SHA_DIGEST_LENGTH));
 
@@ -396,6 +393,11 @@ int main(int argc, char** argv){
                 }
                 memcpy(container_buf + container_buf_pointer, 
                         file_cache + file_offset, chunk_length);
+                // insert meta data
+                Chunk new_chunk;
+                new_chunk.initWithValue(SHA_buf, container_index, container_inner_offset, chunk_length, container_inner_index);
+                new_chunk.saveToDisk();
+                
                 container_inner_offset += chunk_length;
                 container_buf_pointer += chunk_length;
                 container_inner_index ++;
@@ -403,19 +405,20 @@ int main(int argc, char** argv){
             }else{  
                 //遇到问题，块的长度不一样，但hash一样
                 if(chunk_length != search_chunk->getSize()){
-                    printf("Error hash collision with different chunk size\n");
+                    printf("Error hash collision with different chunk SIZE\n");
                 }else{
                     if(!streamCmp(file_cache+file_offset, (unsigned char*)search_chunk->getDataFromDisk().data(), chunk_length)){
-                        printf("Error hash collision with different chunk content\n");
                         hash_collision_sum++;
+                        printf("Error hash collision with different chunk DATA\n");
+                        printf("coming hash: ");
                         printBytes(SHA_buf, SHA_DIGEST_LENGTH);
                         //演算
                         unsigned char SHA_saved_buf[SHA_DIGEST_LENGTH]={0};
-                        unsigned char SHA_coming_buf[SHA_DIGEST_LENGTH]={0};
                         SHA1((unsigned char*)search_chunk->getDataFromDisk().data(), search_chunk->getDataFromDisk().size(), SHA_saved_buf);
-                        SHA1(file_cache+file_offset, chunk_length, SHA_coming_buf);
+                        printf("saved recomputed hash: ");
                         printBytes(SHA_saved_buf, SHA_DIGEST_LENGTH);
-                        printBytes(SHA_coming_buf, SHA_DIGEST_LENGTH);
+                        printf("saved hash: ");
+                        printBytes(search_chunk->getFingerprint(), SHA_DIGEST_LENGTH);
                     } 
                 }
                 
@@ -425,7 +428,7 @@ int main(int argc, char** argv){
                 delete search_chunk;
             }
             file_offset += chunk_length;
-            printf("Get chunk num %d, len %d\n", sum_chunks, chunk_length);
+            //printf("Get chunk num %d, len %d\n", sum_chunks, chunk_length);
         }
         // 最后一个container
         if(container_buf_pointer > 0)
@@ -471,7 +474,7 @@ int main(int argc, char** argv){
             file_cache_offset += ck_data.size();
             delete ck;
         }
-        printf("file_recipe size = %d\n", file_recipe.size());
+        printf("file_recipe size = %ld\n", file_recipe.size());
         printf("file_cache_offset = %d\n", file_cache_offset);
         //最后写文件
         int fd = open(restore_file_path, O_RDWR | O_CREAT, 777);
