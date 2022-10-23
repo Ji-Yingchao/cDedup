@@ -31,18 +31,18 @@ class Chunk{
         uint16_t getConNum(){return ContainerNumber;}
         uint32_t getInnerOffset(){return ContainerInnerOffset;}
         uint8_t* getFingerprint(){return fingerprint;}
-        void initWithCompact(char*);
-        void initWithValue(char*,uint16_t,uint32_t,uint16_t,uint16_t);
+        void initWithCompact(unsigned char*);
+        void initWithValue(unsigned char*,uint16_t,uint32_t,uint16_t,uint16_t);
         std::string getDataFromDisk();
         void saveToDisk();
-        static char restore_container_buf[CONTAINER_SIZE];
+        static unsigned char restore_container_buf[CONTAINER_SIZE];
         static Chunk* lookupChunkMeta(const unsigned char*);
 };
-char Chunk::restore_container_buf[CONTAINER_SIZE] = {0};
+unsigned char Chunk::restore_container_buf[CONTAINER_SIZE] = {0};
 
-char* fingerprintsFilePath = "./fingerprints.meta";
-char* fileRecipesPath = "./FileRecipes";
-char* containersPath = "./Containers";
+char* fingerprintsFilePath = "/home/cyf/lab2/cDedup/fingerprints.meta";
+char* fileRecipesPath = "/home/cyf/lab2/cDedup/FileRecipes";
+char* containersPath = "/home/cyf/lab2/cDedup/Containers";
 
 enum TASK_TYPE{
     TASK_RESTORE,
@@ -69,6 +69,13 @@ enum TASK_TYPE taskTypeTrans(char* s){
     }
 }
 
+bool streamCmp(const unsigned char* s1, const unsigned char* s2, int len){
+    for(int i=0; i<=len-1; i++)
+        if(s1[i] != s2[i])
+            return false;
+    return true;
+}
+
 Chunk* Chunk::lookupChunkMeta(const unsigned char* new_hash){
     int fd = open(fingerprintsFilePath, O_RDONLY);
     if (fd < 0) {
@@ -76,7 +83,7 @@ Chunk* Chunk::lookupChunkMeta(const unsigned char* new_hash){
         exit(-1);
     }
 
-    char meta_buf[META_DATA_SIZE];
+    unsigned char meta_buf[META_DATA_SIZE];
     Chunk* ans = new Chunk();
     for(int i=0; ;i++){
         int n_read = read(fd, meta_buf, META_DATA_SIZE);
@@ -86,7 +93,7 @@ Chunk* Chunk::lookupChunkMeta(const unsigned char* new_hash){
             std::cout<< "lookupChunkMeta read error!"<<std::endl;
             exit(-1);
         } 
-        if(strncmp(meta_buf, (char*)(new_hash), SHA_DIGEST_LENGTH) == 0){
+        if(streamCmp(meta_buf, new_hash, SHA_DIGEST_LENGTH)){
             ans->initWithCompact(meta_buf);
             return ans;
         }
@@ -95,7 +102,7 @@ Chunk* Chunk::lookupChunkMeta(const unsigned char* new_hash){
     return nullptr;
 }
 
-void Chunk::initWithCompact(char* meta){
+void Chunk::initWithCompact(unsigned char* meta){
     memcpy(this->fingerprint, meta, SHA_DIGEST_LENGTH);
     memcpy(&this->ContainerNumber, meta+20, 2);
     memcpy(&this->ContainerInnerOffset, meta+22, 4);
@@ -103,7 +110,7 @@ void Chunk::initWithCompact(char* meta){
     memcpy(&this->ContainerInnerIndex, meta+28, 2);
 }
 
-void Chunk::initWithValue(char* hash, uint16_t cn, uint32_t off, uint16_t size, uint16_t innerIndex){
+void Chunk::initWithValue(unsigned char* hash, uint16_t cn, uint32_t off, uint16_t size, uint16_t innerIndex){
     memcpy(this->fingerprint, hash, SHA_DIGEST_LENGTH);
     this->ContainerNumber = cn;
     this->ContainerInnerOffset = off;
@@ -118,7 +125,7 @@ void Chunk::saveToDisk(){
         exit(-1);
     }
 
-    char meta_buf[META_DATA_SIZE]={0};
+    unsigned char meta_buf[META_DATA_SIZE]={0};
     memcpy(meta_buf, this->fingerprint,  SHA_DIGEST_LENGTH);
     memcpy(meta_buf+SHA_DIGEST_LENGTH, &this->ContainerNumber,  2);
     memcpy(meta_buf+SHA_DIGEST_LENGTH+2, &this->ContainerInnerOffset,  4);
@@ -139,11 +146,11 @@ std::string Chunk::getDataFromDisk(){
     memset(Chunk::restore_container_buf, 0, CONTAINER_SIZE);
     read(fd, Chunk::restore_container_buf, CONTAINER_SIZE); // 可能塞不满
     close(fd);
-    return std::string(Chunk::restore_container_buf + this->ContainerInnerOffset, this->size);
+    return std::string((char*)Chunk::restore_container_buf + this->ContainerInnerOffset, this->size);
 }
 
 unsigned int getFileSize(char* file_path){
-    int fd = open(file_path, O_RDONLY);
+    int fd = open(file_path, O_RDONLY, 777);
     if(fd < 0){
         printf("getFileSize open error, id %d, %s\n", errno, strerror(errno));
         exit(-1);
@@ -176,7 +183,7 @@ void saveFileRecipe(std::vector<std::string> file_recipe, char* fileRecipesPath)
     std::string recipe_name(fileRecipesPath);
     recipe_name.append("/recipe");
     recipe_name.append(std::to_string(n_version));
-    int fd = open(recipe_name.data(), O_RDWR | O_CREAT);
+    int fd = open(recipe_name.data(), O_RDWR | O_CREAT, 777);
     if(fd < 0){ 
         printf("saveFileRecipe open error, id %d, %s\n", errno, strerror(errno)); 
         exit(-1);
@@ -209,7 +216,7 @@ std::vector<std::string> getFileRecipe(uint8_t restore_version){
     }
 
     std::string recipe_name = getRecipeNameFromVersion(restore_version);
-    int fd = open(recipe_name.data(), O_RDONLY);
+    int fd = open(recipe_name.data(), O_RDONLY, 777);
     if(fd < 0){
         printf("getFileRecipe open error, %s, %s\n", strerror(errno), recipe_name.data());
         exit(-1);
@@ -236,7 +243,7 @@ void saveContainer(int container_index, unsigned char* container_buf, unsigned i
     std::string container_name(containersPath);
     container_name.append("/container");
     container_name.append(std::to_string(container_index));
-    int fd = open(container_name.data(), O_RDWR | O_CREAT);
+    int fd = open(container_name.data(), O_RDWR | O_CREAT, 777);
     if(write(fd, container_buf, len) != len){
         printf("saveContainer write error, id %d, %s\n", errno, strerror(errno));
         exit(-1);
@@ -286,13 +293,14 @@ void fastCDC_init(void) {
     MinSize_divide_by_2 = MinSize / 2;
 }
 
-void printBytes(char* s, int len){
+void printBytes(unsigned char* s, int len){
     for(int i=0; i<=len-1; i++)
         printf("%x", s[i]);
     printf("\n");
 }
 
 int main(int argc, char** argv){
+    setuid(0);
     enum TASK_TYPE task_type = NOT_CHOOSED;
     char* input_file_path = nullptr;
     char* restore_file_path = nullptr;
@@ -366,11 +374,11 @@ int main(int argc, char** argv){
             sum_chunk_length += chunk_length;
 
             Chunk* search_chunk = Chunk::lookupChunkMeta(SHA_buf);
-            printf("%d %d\n", container_index, container_inner_offset);
+            //printf("%d %d\n", container_index, container_inner_offset);
             if(search_chunk == nullptr){
                 // insert meta data
                 Chunk new_chunk;
-                new_chunk.initWithValue((char*)SHA_buf, container_index, container_inner_offset, chunk_length, container_inner_index);
+                new_chunk.initWithValue(SHA_buf, container_index, container_inner_offset, chunk_length, container_inner_index);
                 new_chunk.saveToDisk();
                 
                 // file recipe
@@ -393,7 +401,23 @@ int main(int argc, char** argv){
                 container_inner_index ++;
                 delete search_chunk;
             }else{  
-                // 遇到问题，块的长度不一样，但hash一样
+                //遇到问题，块的长度不一样，但hash一样
+                if(chunk_length != search_chunk->getSize()){
+                    printf("Error hash collision with different chunk size\n");
+                }else{
+                    if(!streamCmp(file_cache+file_offset, (unsigned char*)search_chunk->getDataFromDisk().data(), chunk_length)){
+                        printf("Error hash collision with different chunk content\n");
+                        hash_collision_sum++;
+                        printBytes(SHA_buf, SHA_DIGEST_LENGTH);
+                        //演算
+                        unsigned char SHA_saved_buf[SHA_DIGEST_LENGTH]={0};
+                        unsigned char SHA_coming_buf[SHA_DIGEST_LENGTH]={0};
+                        SHA1((unsigned char*)search_chunk->getDataFromDisk().data(), search_chunk->getDataFromDisk().size(), SHA_saved_buf);
+                        SHA1(file_cache+file_offset, chunk_length, SHA_coming_buf);
+                        printBytes(SHA_saved_buf, SHA_DIGEST_LENGTH);
+                        printBytes(SHA_coming_buf, SHA_DIGEST_LENGTH);
+                    } 
+                }
                 
                 dedup_chunks ++;
                 dedup_size += chunk_length;
@@ -401,6 +425,7 @@ int main(int argc, char** argv){
                 delete search_chunk;
             }
             file_offset += chunk_length;
+            printf("Get chunk num %d, len %d\n", sum_chunks, chunk_length);
         }
         // 最后一个container
         if(container_buf_pointer > 0)
@@ -410,9 +435,10 @@ int main(int argc, char** argv){
         // 重删统计
         double dedup_ratio = double(dedup_chunks) / sum_chunks;
         printf("-- Dedup statistics -- \n");
-        printf("Dedup chunks %d\n", dedup_chunks);
+        printf("Hash collision num %d\n", hash_collision_sum);
         printf("Sum chunks %d\n", sum_chunks);
         printf("Sum chunk length %d\n", sum_chunk_length);
+        printf("Dedup chunks %d\n", dedup_chunks);
         printf("Dedup size %d\n", dedup_size);
         printf("Dedup ratio %.2f%\n", dedup_ratio*100);
 
@@ -448,7 +474,7 @@ int main(int argc, char** argv){
         printf("file_recipe size = %d\n", file_recipe.size());
         printf("file_cache_offset = %d\n", file_cache_offset);
         //最后写文件
-        int fd = open(restore_file_path, O_RDWR | O_CREAT);
+        int fd = open(restore_file_path, O_RDWR | O_CREAT, 777);
         if(fd < 0){
             printf("无法写文件!!! %s\n", strerror(errno));
             exit(-1);
@@ -457,6 +483,7 @@ int main(int argc, char** argv){
             printf("Restore, write file error!!!\n");
             exit(-1);
         }
+        close(fd);
     }
     return 0;
 }
