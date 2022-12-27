@@ -1,4 +1,4 @@
-#include "fastcdc.h"
+#include "./include/fastcdc.h"
 #include <vector>
 #include <map>
 #include <fstream>
