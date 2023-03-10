@@ -1,4 +1,3 @@
-#include "./include/fastcdc.h"
 #include <vector>
 #include <map>
 #include <fstream>
@@ -12,6 +11,8 @@
 #include <openssl/sha.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include "fastcdc.h"
+#include "full_file_deduplicater.h"
 
 #define FILE_CACHE (1024*1024*1024)
 #define CONTAINER_SIZE (4*1024*1024) //4MB容器
@@ -19,14 +20,22 @@
 // <SHA1 20B, ContainerNumber 2B, offset 4B, size 2B, ContainerInnerIndex 2B>
 #define META_DATA_SIZE 30
 
-char* fingerprintsFilePath = "/home/cyf/lab2/cDedup/fingerprints.meta";
-char* fileRecipesPath = "/home/cyf/lab2/cDedup/FileRecipes";
-char* containersPath = "/home/cyf/lab2/cDedup/Containers";
+char* fingerprintsFilePath = "/home/cyf/cDedup/fingerprints.meta";
+char* fileRecipesPath = "/home/cyf/cDedup/FileRecipes";
+char* containersPath = "/home/cyf/cDedup/Containers";
+char* fullFileFingerprintsPath = "/home/cyf/cDedup/FFFP.meta";
+char* fullFileStoragePath = "/home/cyf/cDedup/FULL_FILE_STORAGE";
 
 enum TASK_TYPE{
     TASK_RESTORE,
     TASK_WRITE,
     NOT_CHOOSED
+};
+
+enum CHUNKING_METHOD{
+    CDC,
+    FSC,
+    FULL_FILE
 };
 
 struct option long_options[] = {
@@ -75,6 +84,7 @@ class Chunk{
         static unsigned char restore_container_buf[CONTAINER_SIZE];
         static Chunk* lookupChunkMeta(const unsigned char*);
 };
+
 unsigned char Chunk::restore_container_buf[CONTAINER_SIZE] = {0};
 
 Chunk* Chunk::lookupChunkMeta(const unsigned char* new_hash){
@@ -151,19 +161,6 @@ std::string Chunk::getDataFromDisk(){
 }
 // ---class chunk END
 
-unsigned int getFileSize(char* file_path){
-    int fd = open(file_path, O_RDONLY, 777);
-    if(fd < 0){
-        printf("getFileSize open error, id %d, %s\n", errno, strerror(errno));
-        exit(-1);
-    }
-    struct stat _stat;
-    if(fstat(fd, &_stat) < 0){
-        printf("getFileSize fstat error, id %d, %s\n", errno, strerror(errno));
-        exit(-1);
-    }
-    return _stat.st_size / (SHA_DIGEST_LENGTH); 
-}
 
 unsigned int getFilesNum(char* dirPath){
     int ans = 0;
@@ -195,7 +192,6 @@ void saveFileRecipe(std::vector<std::string> file_recipe, char* fileRecipesPath)
             printf("save recipe write error\n");
     }
 }
-
 
 std::string getRecipeNameFromVersion(uint8_t restore_version){
     std::string recipe_name(fileRecipesPath);
@@ -252,49 +248,6 @@ void saveContainer(int container_index, unsigned char* container_buf, unsigned i
     }
 }
 
-uint16_t cdc_origin_64(unsigned char *p, uint32_t n) {
-    uint64_t fingerprint = 0, digest;
-    uint16_t i = MinSize;
-    if (n <= MinSize)  
-        return n;
-    if (n > MaxSize) 
-        n = MaxSize;
-
-    for ( ;i<n ;i++) {
-        fingerprint = (fingerprint << 1) + (GEARv2[p[i]]);
-        if ((!(fingerprint & FING_GEAR_08KB_64)))
-            return i;
-    }
-    return n;
-}
-
-void fastCDC_init(void) {
-    unsigned char md5_digest[16];
-    uint8_t seed[SeedLength];
-    for (int i = 0; i < SymbolCount; i++) {
-        for (int j = 0; j < SeedLength; j++) {
-            seed[j] = i;
-        }
-        g_global_matrix[i] = 0;
-        MD5(seed, SeedLength, md5_digest);
-        memcpy(&(g_global_matrix[i]), md5_digest, 4);
-        g_global_matrix_left[i] = g_global_matrix[i] << 1;
-    }
-
-    // 64 bit init
-    for (int i = 0; i < SymbolCount; i++) {
-        LEARv2[i] = GEARv2[i] << 1;
-    }
-
-    MinSize = 8192 / 4;
-    MaxSize = 8192 * 4;    // 32768;
-    Mask_15 = 0xf9070353;  //  15个1
-    Mask_11 = 0xd9000353;  //  11个1
-    Mask_11_64 = 0x0000d90003530000;
-    Mask_15_64 = 0x0000f90703530000;
-    MinSize_divide_by_2 = MinSize / 2;
-}
-
 void printBytes(unsigned char* s, int len){
     for(int i=0; i<=len-1; i++)
         printf("%x", s[i]);
@@ -304,9 +257,11 @@ void printBytes(unsigned char* s, int len){
 int main(int argc, char** argv){
     setuid(0);
     enum TASK_TYPE task_type = NOT_CHOOSED;
+    enum CHUNKING_METHOD cm = CDC;
     char* input_file_path = nullptr;
     char* restore_file_path = nullptr;
     uint8_t restore_version = -1;
+    int restore_full_file_id = -1;
 
     int c;
     int option_index = 0;
@@ -329,6 +284,24 @@ int main(int argc, char** argv){
                 exit(-1);
                 break;
         }
+    }
+
+    if(cm == FULL_FILE){
+        FullFileDeduplicater ffd(fullFileStoragePath, fullFileFingerprintsPath);
+        if(task_type == TASK_WRITE){
+            ffd.writeFile(input_file_path);
+
+            if(ffd.get_file_exist())
+                printf("Your input file is existed.\n");
+            else
+                printf("Your input file is not existed.\n");
+
+            printf("The file id is %d\n", ffd.get_file_id());
+        }
+        else if(task_type == TASK_RESTORE){
+            ffd.restoreFile(restore_full_file_id, restore_file_path);
+        }
+        return 0;
     }
 
     if(task_type == TASK_WRITE){
@@ -361,6 +334,7 @@ int main(int argc, char** argv){
         int hash_collision_sum = 0;
 
         fastCDC_init();
+
         if(n_read < 0){
             printf("read file error, id %d, %s\n", errno, strerror(errno));
             exit(-1);
