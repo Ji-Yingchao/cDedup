@@ -39,6 +39,7 @@ void FullFileDeduplicater::scan_and_insert_hash(const unsigned char* hash){
     }
     this->file_id = files_num;
     this->file_exist = false;
+    this->insert_hash(hash);
     close(fd);
 }
 
@@ -61,8 +62,8 @@ void FullFileDeduplicater::init_files_num(){
 }
 
 void FullFileDeduplicater::restoreFile(int file_id, char* restore_path){
-    std::string abs_saved_file_name = generate_abs_file_name_from_file_id(this->storage_path, this->file_id); 
-    int fd_new = open(restore_path, O_CREAT, 777);
+    std::string abs_saved_file_name = generate_abs_file_name_from_file_id(this->storage_path, file_id); 
+    int fd_new = open(restore_path, O_CREAT | O_RDWR, 777);
     int fd_saved = open(abs_saved_file_name.c_str(), O_RDONLY, 777);
     sendfile(fd_new, fd_saved, NULL, FULL_FILE_CACHE);
 }
@@ -88,7 +89,7 @@ int FullFileDeduplicater::get_file_id(){
 
 void FullFileDeduplicater::save_file(const char* input_file_path){
     std::string abs_file_name = generate_abs_file_name_from_file_id(this->storage_path, this->file_id); 
-    int fd_new = open(abs_file_name.c_str(), O_CREAT, 777);
+    int fd_new = open(abs_file_name.c_str(), O_CREAT | O_RDWR, 777);
     int fd_input = open(input_file_path, O_RDONLY, 777);
     sendfile(fd_new, fd_input, NULL, FULL_FILE_CACHE);
 }
@@ -101,7 +102,7 @@ std::string FullFileDeduplicater::generate_abs_file_name_from_file_id(std::strin
     else {
         abs_file_name.append(_storage_path);
         abs_file_name.push_back('/');
-        abs_file_name.append(std::to_string(file_id));
+        abs_file_name.append(std::to_string(_file_id));
     }
     return abs_file_name;
 }

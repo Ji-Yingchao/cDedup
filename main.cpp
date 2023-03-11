@@ -39,10 +39,12 @@ enum CHUNKING_METHOD{
 };
 
 struct option long_options[] = {
-    { "task", required_argument, NULL, 't' },
+    { "Task", required_argument, NULL, 't' },
     { "InputFile", required_argument, NULL, 'i' },
     { "RestorePath", required_argument, NULL, 'r' },
     { "RestoreVersion", required_argument, NULL, 'v' },
+    { "ChunkingMethod", required_argument, NULL, 'c' },
+    { "RestoreId", required_argument, NULL, 'l' },
     { 0, 0, 0, 0 }
 };
 
@@ -53,6 +55,19 @@ enum TASK_TYPE taskTypeTrans(char* s){
         return TASK_RESTORE;
     }else{
         printf("Not support task type:%s\n", s);
+        exit(-1);
+    }
+}
+
+enum CHUNKING_METHOD cmTypeTrans(char* s){
+    if(strcmp(s, "cdc") == 0){
+        return CDC;
+    }else if (strcmp(s, "fsc") == 0){
+        return FSC;
+    }else if (strcmp(s, "file") == 0){
+        return FULL_FILE;
+    }else{
+        printf("Not support chunking method type:%s\n", s);
         exit(-1);
     }
 }
@@ -257,7 +272,7 @@ void printBytes(unsigned char* s, int len){
 int main(int argc, char** argv){
     setuid(0);
     enum TASK_TYPE task_type = NOT_CHOOSED;
-    enum CHUNKING_METHOD cm = CDC;
+    enum CHUNKING_METHOD chunking_method = CDC;
     char* input_file_path = nullptr;
     char* restore_file_path = nullptr;
     uint8_t restore_version = -1;
@@ -265,7 +280,10 @@ int main(int argc, char** argv){
 
     int c;
     int option_index = 0;
-    while ((c = getopt_long(argc, argv, "t:i:r:v:", long_options, &option_index)) != -1) {
+    // CDC
+    // FSC
+    // FULL FILE: task type, input file path, chunking method
+    while ((c = getopt_long(argc, argv, "t:i:r:v:c:l", long_options, &option_index)) != -1) {
         switch (c) {
             case 't':
                 task_type = taskTypeTrans(optarg);
@@ -279,6 +297,12 @@ int main(int argc, char** argv){
             case 'v':
                 restore_version = atoi(optarg);
                 break;
+            case 'c':
+                chunking_method = cmTypeTrans(optarg);
+                break;
+            case 'l':
+                restore_full_file_id = atoi(optarg);
+                break;
             default:
                 printf("Not support option: %c\n", c);
                 exit(-1);
@@ -286,7 +310,7 @@ int main(int argc, char** argv){
         }
     }
 
-    if(cm == FULL_FILE){
+    if(chunking_method == FULL_FILE){
         FullFileDeduplicater ffd(fullFileStoragePath, fullFileFingerprintsPath);
         if(task_type == TASK_WRITE){
             ffd.writeFile(input_file_path);

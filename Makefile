@@ -1,6 +1,6 @@
 CC = gcc
 LIB = -lcrypto -lz -lstdc++
-SRC = main.cpp ./src/fastcdc.cpp
+SRC = main.cpp ./src/fastcdc.cpp ./src/full_file_deduplicater.cpp
 EXE_NAME = cDedup
 
 amazing:
