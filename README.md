@@ -1,12 +1,25 @@
 # cDedup
 
+### FSC deduplication Usage
+```
+./init.sh
+```
++ Backup a new workload into the system
+```
+./cDedup --task write --InputFile [backup workload] --ChunkingMethod fsc --Size [4 or 8 or 16]
+```
++ Restore a workload of from the system
+```
+./cDedup --task restore --RestorePath [path to restore] --RestoreRecipe [which version to restore(1 ~ no. of the last retained version)]
+```
+
 ### CDC deduplication Usage
 ```
 ./init.sh
 ```
 + Backup a new workload into the system
 ```
-./cDedup --task write --InputFile [backup workload]
+./cDedup --task write --InputFile [backup workload] --ChunkingMethod cdc
 ```
 + Restore a workload of from the system
 ```

@@ -7,4 +7,6 @@ amazing:
 	$(CC)  $(SRC) $(LIB) -o $(EXE_NAME) -g -I ./include
 
 clean:
-	rm $(EXE_NAME)
+	rm $(EXE_NAME) \
+	rm FFFP.meta fingerprints.meta \
+	rm -fr FileRecipes FULL_FILE_STORAGE Containers

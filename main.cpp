@@ -26,6 +26,8 @@ char* containersPath = "/home/cyf/cDedup/Containers";
 char* fullFileFingerprintsPath = "/home/cyf/cDedup/FFFP.meta";
 char* fullFileStoragePath = "/home/cyf/cDedup/FULL_FILE_STORAGE";
 
+int (*chunking) (unsigned char*p, int n);
+
 enum TASK_TYPE{
     TASK_RESTORE,
     TASK_WRITE,
@@ -45,6 +47,7 @@ struct option long_options[] = {
     { "RestoreVersion", required_argument, NULL, 'v' },
     { "ChunkingMethod", required_argument, NULL, 'c' },
     { "RestoreId", required_argument, NULL, 'l' },
+    { "Size", required_argument, NULL, 's' },//used for fsc
     { 0, 0, 0, 0 }
 };
 
@@ -269,6 +272,18 @@ void printBytes(unsigned char* s, int len){
     printf("\n");
 }
 
+int FSC_4(unsigned char *p, int n) {
+    return 4*1024;
+}
+
+int FSC_8(unsigned char *p, int n) {
+    return 8*1024;
+}
+
+int FSC_16(unsigned char *p, int n) {
+    return 16*1024;
+}
+
 int main(int argc, char** argv){
     setuid(0);
     enum TASK_TYPE task_type = NOT_CHOOSED;
@@ -277,6 +292,7 @@ int main(int argc, char** argv){
     char* restore_file_path = nullptr;
     uint8_t restore_version = -1;
     int restore_full_file_id = -1;
+    int fixed_size = 4;
 
     int c;
     int option_index = 0;
@@ -303,6 +319,9 @@ int main(int argc, char** argv){
             case 'l':
                 restore_full_file_id = atoi(optarg);
                 break;
+            case 's':
+                fixed_size = atoi(optarg);
+                break;
             default:
                 printf("Not support option: %c\n", c);
                 exit(-1);
@@ -326,6 +345,21 @@ int main(int argc, char** argv){
             ffd.restoreFile(restore_full_file_id, restore_file_path);
         }
         return 0;
+    }
+
+    if(chunking_method == CDC){
+        chunking = cdc_origin_64;
+    }else if(chunking_method == FSC){
+        if(fixed_size == 4){
+            chunking = FSC_4;
+        }else if(fixed_size == 8){
+            chunking = FSC_8;
+        }else if(fixed_size == 16){
+            chunking = FSC_16;
+        }else{
+            printf("Invalid fixed size, the support size is 4 or 8 or 16\n");
+            return 0;
+        }
     }
 
     if(task_type == TASK_WRITE){
@@ -367,7 +401,7 @@ int main(int argc, char** argv){
             if(file_offset >= n_read)
                 break;
             
-            chunk_length = cdc_origin_64(file_cache + file_offset, n_read - file_offset);
+            chunk_length = chunking(file_cache + file_offset, n_read - file_offset);
             memset(SHA_buf, 0, SHA_DIGEST_LENGTH);
             SHA1(file_cache + file_offset, chunk_length, SHA_buf);
             sum_chunks ++;
