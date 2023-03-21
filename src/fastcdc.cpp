@@ -111,8 +111,25 @@ uint64_t FING_GEAR_02KB_ls_64 = 0x0000d90003530000 << 1;
 uint64_t FING_GEAR_32KB_ls_64 = 0x0000d9f003530000 << 1;
 uint64_t FING_GEAR_08KB_64 = 0x0000d93003530000;
 
-uint64_t FING_GEAR_02KB_64 = 0x0000d90003530000;
 uint64_t FING_GEAR_32KB_64 = 0x0000d9f003530000;
+uint64_t FING_GEAR_02KB_64 = 0x0000d90003530000;
+
+// NC level 1
+uint64_t Mask14 = 0x0000d9f003530000;
+uint64_t Mask12 = 0x0000d90003530000;
+
+//NC level 2
+uint64_t Mask15 = 0x0000d9f003530000;
+uint64_t Mask11 = 0x0000d90003530000;
+
+// NC level 3
+uint64_t Mask16 = 0x0000d9f003530000;
+uint64_t Mask10 = 0x0000d90003530000;
+
+// NC combination
+uint32_t Mask_front;
+uint32_t Mask_back;
+
                                                       
 // global variants
 struct timeval tmStart, tmEnd;
@@ -123,13 +140,12 @@ int chunk_dist[30];
 uint32_t g_global_matrix[SymbolCount];
 uint32_t g_global_matrix_left[SymbolCount];
 uint32_t expectCS;
-uint32_t Mask_15;
-uint32_t Mask_11;
-uint64_t Mask_11_64, Mask_15_64;
 
 uint32_t MinSize;
-uint32_t MinSize_divide_by_2;
 uint32_t MaxSize;
+uint32_t fastcdc_avg_size;
+uint32_t MinSize_divide_by_2;
+
 int sameCount = 0;
 int tmpCount = 0;
 int smalChkCnt = 0;  //记录小于8KB的分块
@@ -166,7 +182,7 @@ void printChunkLengthStatistic(){
 }
 
 // functions
-void fastCDC_init(void) {
+void fastCDC_init(int fas, int NC_level) {
     unsigned char md5_digest[16];
     uint8_t seed[SeedLength];
     for (int i = 0; i < SymbolCount; i++) {
@@ -186,33 +202,47 @@ void fastCDC_init(void) {
         LEARv2[i] = GEARv2[i] << 1;
     }
 
-    MinSize = 8192 / 4;
-    MaxSize = 8192 * 4;    // 32768;
-    Mask_15 = 0xf9070353;  //  15个1
-    Mask_11 = 0xd9000353;  //  11个1
-    Mask_11_64 = 0x0000d90003530000;
-    Mask_15_64 = 0x0000f90703530000;
+    MinSize = fas / 4;
+    MaxSize = fas * 4;
+    fastcdc_avg_size = fas;
+
+    if(NC_level == 1){
+        Mask_front = Mask14;
+        Mask_back = Mask12;
+    }
+    else if(NC_level == 2){
+        Mask_front = Mask15;
+        Mask_back = Mask11;
+    }
+    else if(NC_level == 3){
+        Mask_front = Mask16;
+        Mask_back = Mask10;
+    }
+    else if(NC_level == 0)
+        ;
+    else
+        printf("Invalid NC level: %d\n", NC_level);
+
     MinSize_divide_by_2 = MinSize / 2;
 }
 
-int normalized_chunking_64(unsigned char *p, int n) {
-    uint64_t fingerprint = 0, digest;
-    MinSize = 6 * 1024;
-    int i = MinSize, Mid = 8 * 1024;
+int FastCDC_with_NC(unsigned char *p, int n) {
+    uint64_t fingerprint = 0;
+    int i = MinSize;
 
-    // the minimal subChunk Size.
+    // cut point skipping
     if (n <= MinSize)  
         return n;
 
     if (n > MaxSize)
         n = MaxSize;
-    else if (n < Mid)
-        Mid = n;
+    else if (n <= fastcdc_avg_size)
+        fastcdc_avg_size = n;
 
-    while (i < Mid) {
+    while (i < fastcdc_avg_size) {
         fingerprint = (fingerprint << 1) + (GEARv2[p[i]]);
 
-        if ((!(fingerprint & FING_GEAR_32KB_64))) {
+        if ((!(fingerprint & Mask_front))) {
             return i;
         }
 
@@ -222,7 +252,7 @@ int normalized_chunking_64(unsigned char *p, int n) {
     while (i < n) {
         fingerprint = (fingerprint << 1) + (GEARv2[p[i]]);
 
-        if ((!(fingerprint & FING_GEAR_02KB_64))) {
+        if ((!(fingerprint & Mask_back))) {
             return i;
         }
 
@@ -314,7 +344,11 @@ int rolling_data_2byes_64(unsigned char *p, int n) {
     return n;
 }
 
-int cdc_origin_64(unsigned char *p, int n) {
+/*
+    Come from GearCDC, deploy Optimized Hash Judgement and Cut Point Skipping
+    The normalized chunking level is 0
+*/
+int FastCDC_without_NC(unsigned char *p, int n) {
     uint64_t fingerprint = 0, digest;
     int i = MinSize;
     if (n <= MinSize)  

@@ -16,16 +16,16 @@
 #include "uthash.h"
 
 // init function
-void fastCDC_init(void);
+void fastCDC_init(int fastcdc_avg_size, int NC_level);
 
 // origin fastcdc function
-int cdc_origin_64(unsigned char *p, int n);
+int FastCDC_without_NC(unsigned char *p, int n);
 
 // fastcdc with once rolling 2 bytes 
 int rolling_data_2byes_64(unsigned char *p, int n);
 
 // normalized fastcdc
-int normalized_chunking_64(unsigned char *p, int n);
+int FastCDC_with_NC(unsigned char *p, int n);
 
 // normalized fastcdc with once rolling 2 bytes
 int normalized_chunking_2byes_64(unsigned char *p, int n);

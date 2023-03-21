@@ -47,7 +47,8 @@ struct option long_options[] = {
     { "RestoreVersion", required_argument, NULL, 'v' },
     { "ChunkingMethod", required_argument, NULL, 'c' },
     { "RestoreId", required_argument, NULL, 'l' },
-    { "Size", required_argument, NULL, 's' },//used for fsc
+    { "Size", required_argument, NULL, 's' }, //used for fsc size or fastcdc avg size
+    { "Normal", required_argument, NULL, 'n' }, //used for fastcdc normalized level
     { 0, 0, 0, 0 }
 };
 
@@ -292,7 +293,8 @@ int main(int argc, char** argv){
     char* restore_file_path = nullptr;
     uint8_t restore_version = -1;
     int restore_full_file_id = -1;
-    int fixed_size = 4;
+    int arg_SIZE = 4; // unit K
+    int NC_level = 0;
 
     int c;
     int option_index = 0;
@@ -320,7 +322,10 @@ int main(int argc, char** argv){
                 restore_full_file_id = atoi(optarg);
                 break;
             case 's':
-                fixed_size = atoi(optarg);
+                arg_SIZE = atoi(optarg);
+                break;
+            case 'n':
+                NC_level = atoi(optarg);
                 break;
             default:
                 printf("Not support option: %c\n", c);
@@ -348,13 +353,21 @@ int main(int argc, char** argv){
     }
 
     if(chunking_method == CDC){
-        chunking = cdc_origin_64;
+        fastCDC_init(arg_SIZE*1024, NC_level);
+
+        if(NC_level == 0)
+            chunking = FastCDC_without_NC;
+        else if(1<=NC_level && NC_level<=3)
+            chunking = FastCDC_with_NC;
+        else{
+            printf("Invalid NC level: %d\n", NC_level);
+        }
     }else if(chunking_method == FSC){
-        if(fixed_size == 4){
+        if(arg_SIZE == 4){
             chunking = FSC_4;
-        }else if(fixed_size == 8){
+        }else if(arg_SIZE == 8){
             chunking = FSC_8;
-        }else if(fixed_size == 16){
+        }else if(arg_SIZE == 16){
             chunking = FSC_16;
         }else{
             printf("Invalid fixed size, the support size is 4 or 8 or 16\n");
@@ -390,8 +403,6 @@ int main(int argc, char** argv){
         int sum_chunk_length = 0;
         int dedup_size = 0;
         int hash_collision_sum = 0;
-
-        fastCDC_init();
 
         if(n_read < 0){
             printf("read file error, id %d, %s\n", errno, strerror(errno));
