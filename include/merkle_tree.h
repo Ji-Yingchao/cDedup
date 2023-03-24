@@ -10,8 +10,9 @@ class LP_node{
         bool found;
         std::string SHA1_hash;
         std::vector<LP_node*> children; //L2-L6的孩子指向LP_node，L1的孩子指向L0_node
-        LP_node(char* hash):SHA1_hash(hash, 20){
+        LP_node(unsigned char* hash, int level_):SHA1_hash((char*)hash, 20){
             this->found = true;
+            this->level = level_;
         }
 };
 
@@ -19,8 +20,8 @@ class L0_node: public LP_node{
     public:
         uint32_t file_offset;  
         uint16_t chunk_length; 
-        L0_node(uint32_t fo, uint16_t cl, char * hash):
-        LP_node(hash)
+        L0_node(uint32_t fo, uint16_t cl, unsigned char * hash):
+        LP_node(hash, 0)
         {
             this->file_offset  = fo;
             this->chunk_length = cl;
@@ -37,7 +38,7 @@ class MerkleTree{
         std::vector<std::vector<LP_node*>> tree;
         std::vector<L0_node>& base;
         void showTreeSize();
-        void buildLevelx(int i);
+        bool buildLevelx(int i);
         void buildLevel1(std::vector<L0_node>& nodes);
         void walk(LP_node*);
         bool lookupL0(const char*);
@@ -45,7 +46,7 @@ class MerkleTree{
         void insertLP(const char*, int);
 
     public:
-        MerkleTree(char** meta_, int gs, int ml, std::vector<L0_node>& base_):
+        MerkleTree(const char** meta_, int gs, int ml, std::vector<L0_node>& base_):
         meta_path(meta_),
         base(base_)
         {

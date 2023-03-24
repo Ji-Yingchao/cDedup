@@ -2,6 +2,7 @@
 #include <openssl/sha.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <string.h>
 
 class Chunk;
 
@@ -11,10 +12,10 @@ void MerkleTree::showTreeSize(){
     }
 }
 
-void MerkleTree::buildLevelx(int p){
+bool MerkleTree::buildLevelx(int p){
     if(this->tree[p-2].size() == 1){
         //已经到头了，这个下层只有一个节点，无法再构建一层了
-        return ;
+        return false;
     }
 
     // 利用i-1层的节点构建第i层节点
@@ -24,23 +25,29 @@ void MerkleTree::buildLevelx(int p){
     int num  = 0;
     for(int i=0; i<=this->tree[p-2].size()-1; i++){
         SHA1_Init(&c);
+        memset(sha1, 0, SHA_DIGEST_LENGTH);
         SHA1_Update(&c, this->tree[p-2][i]->SHA1_hash.c_str(), len);
         num++;
         if(num % this->group_size == 0){
             SHA1_Final(sha1, &c);
             num = 0;
-            this->tree[0].emplace_back(new LP_node((char*)sha1));
+            this->tree[p-1].emplace_back(new LP_node(sha1, p));
         
             for(int j=this->group_size; j>=1; j--){
-                this->tree[0].back()->children.emplace_back(this->tree[p-2][i-j+1]);
+                this->tree[p-1].back()->children.emplace_back(this->tree[p-2][i-j+1]);
             }
         }
     }
-    SHA1_Final(sha1, &c);
-    this->tree[0].emplace_back(std::string((char*)sha1, SHA_DIGEST_LENGTH));
-    for(int j=num; j>=1; j--){
-        this->tree[0].back()->children.emplace_back(this->tree[p-2][this->tree[p-2].size()-j]);
+    if(num == 0){
+        return true;
     }
+
+    SHA1_Final(sha1, &c);
+    this->tree[p-1].emplace_back(new LP_node{sha1, p});
+    for(int j=num; j>=1; j--){
+        this->tree[p-1].back()->children.emplace_back(this->tree[p-2][this->tree[p-2].size()-j]);
+    }
+    return true;
 }
 
 void MerkleTree::buildLevel1(std::vector<L0_node>& nodes){
@@ -50,13 +57,14 @@ void MerkleTree::buildLevel1(std::vector<L0_node>& nodes){
     int num  = 0;
     for(int i=0; i<=nodes.size()-1; i++){
         SHA1_Init(&c);
+        memset(sha1, 0, SHA_DIGEST_LENGTH);
         SHA1_Update(&c, nodes[i].SHA1_hash.c_str(), len);
         num++;
         if(num % this->group_size == 0){
             // 计算上层hash
             SHA1_Final(sha1, &c);
             num = 0;
-            this->tree[0].emplace_back(new LP_node((char*)sha1));
+            this->tree[0].emplace_back(new LP_node(sha1, 1));
         
             // 上层节点链接下层
             for(int j=this->group_size; j>=1; j--){
@@ -66,7 +74,7 @@ void MerkleTree::buildLevel1(std::vector<L0_node>& nodes){
     }
     // 计算上层hash，这层剩余的节点可能不够group size，但是还是凑一起
     SHA1_Final(sha1, &c);
-    this->tree[0].emplace_back(std::string((char*)sha1, SHA_DIGEST_LENGTH));
+    this->tree[0].emplace_back(new LP_node{sha1, 1});
 
     // 上层节点链接下层
     for(int j=num; j>=1; j--){
@@ -80,7 +88,8 @@ void MerkleTree::buildTree(std::vector<L0_node>& nodes){
         if(i==1){
             buildLevel1(nodes);
         }else{
-            buildLevelx(i);
+            if(!buildLevelx(i))
+                break;
         }
     }
 }
@@ -112,7 +121,8 @@ void MerkleTree::walk(LP_node* root){
         if(lookupLP(root->SHA1_hash.c_str(), root->level)){
             ;
         }else{
-            // root->found = false;
+            root->found = false;
+            this->insertLP(root->SHA1_hash.c_str(), root->level);
             for(int i=0; i<=root->children.size()-1; i++){
                 walk(root->children[i]);
             }
@@ -124,7 +134,7 @@ void MerkleTree::walk(LP_node* root){
 # define L0_META_DATA_SIZE 30 
 bool MerkleTree::lookupL0(const char* hash){
     int fd = open(this->meta_path[0], O_RDONLY, 777);
-    unsigned char hash_cache[L0_META_DATA_SIZE*100] = {0};
+    char hash_cache[L0_META_DATA_SIZE*100] = {0};
     int n = read(fd, hash_cache, L0_META_DATA_SIZE*100);
     
     for(int i=0; i<=n/L0_META_DATA_SIZE - 1; i++){
@@ -142,9 +152,10 @@ bool MerkleTree::lookupL0(const char* hash){
     return false;
 }
 
+// char和unsigned char不能比较！！！
 bool MerkleTree::lookupLP(const char* hash, int P){
     int fd = open(this->meta_path[P], O_RDONLY, 777);
-    unsigned char hash_cache[SHA_DIGEST_LENGTH * 100] = {0};
+    char hash_cache[SHA_DIGEST_LENGTH * 100] = {0};
     int n = read(fd, hash_cache, SHA_DIGEST_LENGTH * 100);
     
     for(int i=0; i<=n/SHA_DIGEST_LENGTH - 1; i++){
@@ -163,7 +174,7 @@ bool MerkleTree::lookupLP(const char* hash, int P){
 }
 
 void MerkleTree::insertLP(const char* hash, int level){
-    int fd = open(this->meta_path[level-1], O_RDWR | O_APPEND, 777);
+    int fd = open(this->meta_path[level], O_RDWR | O_APPEND, 777);
     write(fd, hash, SHA_DIGEST_LENGTH);
     close(fd);
 }

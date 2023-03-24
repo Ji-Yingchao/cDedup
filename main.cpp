@@ -27,7 +27,7 @@ char* containersPath = "/home/cyf/cDedup/Containers";
 char* fullFileFingerprintsPath = "/home/cyf/cDedup/FFFP.meta";
 char* fullFileStoragePath = "/home/cyf/cDedup/FULL_FILE_STORAGE";
 
-char* merkleMeta[] = {fingerprintsFilePath,
+const char* merkleMeta[] = {fingerprintsFilePath,
                         "/home/cyf/cDedup/L1.meta", // 里面只有指纹20字节
                         "/home/cyf/cDedup/L2.meta",
                         "/home/cyf/cDedup/L3.meta",
@@ -431,7 +431,7 @@ int main(int argc, char** argv){
     if(task_type == TASK_WRITE){
         int current_version = getFilesNum(fileRecipesPath);
 
-        int fd = open(input_file_path, O_RDONLY);
+        int fd = open(input_file_path, O_RDONLY, 777);
         if(fd < 0){
             printf("open file error, id %d, %s\n", errno, strerror(errno));
             exit(-1);
@@ -451,7 +451,7 @@ int main(int argc, char** argv){
         uint32_t n_read = read(fd, file_cache, FILE_CACHE);
         uint32_t file_offset = 0;
         uint16_t chunk_length = 0;
-        int sum_chunk_length = 0;
+        int sum_size = 0;
         int dedup_size = 0;
         int hash_collision_sum = 0;
         MerkleTree *mt = nullptr;
@@ -469,10 +469,8 @@ int main(int argc, char** argv){
                 chunk_length = chunking(file_cache + file_offset, n_read - file_offset);
                 memset(SHA_buf, 0, SHA_DIGEST_LENGTH);
                 SHA1(file_cache + file_offset, chunk_length, SHA_buf);
-                L0_nodes.emplace_back(L0_node(file_offset, chunk_length, (char*)SHA_buf));
+                L0_nodes.emplace_back(L0_node(file_offset, chunk_length, SHA_buf));
 
-                sum_chunks ++;
-                sum_chunk_length += chunk_length;
                 file_offset += chunk_length;
                 file_recipe.push_back(std::string((char*)SHA_buf, SHA_DIGEST_LENGTH));
             }
@@ -483,10 +481,17 @@ int main(int argc, char** argv){
             
             // save non-duplicate chunks to container
             for(auto &x: L0_nodes){
-                if(!x.found)
-                saveChunkToContainer(container_buf_pointer, container_buf, 
-                                    container_index, container_inner_offset, container_inner_index,
-                                    x.chunk_length, x.file_offset, file_cache, (void*)x.SHA1_hash.c_str());
+                // Statistic
+                sum_chunks ++;
+                sum_size += x.chunk_length;
+                if(!x.found){
+                    saveChunkToContainer(container_buf_pointer, container_buf, 
+                        container_index, container_inner_offset, container_inner_index,
+                        x.chunk_length, x.file_offset, file_cache, (void*)x.SHA1_hash.c_str());
+                }else{
+                    dedup_chunks ++;
+                    dedup_size += x.chunk_length;
+                }
             }
 
             goto writend;
@@ -506,7 +511,7 @@ int main(int argc, char** argv){
 
             // Statistic
             sum_chunks ++;
-            sum_chunk_length += chunk_length;
+            sum_size += chunk_length;
             
             // lookup fingerprint
             Chunk* search_chunk = Chunk::lookupChunkMeta(SHA_buf);
@@ -554,10 +559,10 @@ int main(int argc, char** argv){
         printf("-- Dedup statistics -- \n");
         printf("Hash collision num %d\n", hash_collision_sum);
         printf("Sum chunks %d\n",         sum_chunks);
-        printf("Sum chunk length %d\n",   sum_chunk_length);
+        printf("Sum size %d\n",           sum_size);
         printf("Dedup chunks %d\n",       dedup_chunks);
         printf("Dedup size %d\n",         dedup_size);
-        printf("Dedup ratio %.2f%\n",     double(dedup_chunks) / sum_chunks *100);
+        printf("Deduplication Ratio %.2f%\n",     double(dedup_chunks) / sum_chunks *100);
 
     }else if(task_type == TASK_RESTORE){
         if(!fileRecipeExist(restore_version)){
