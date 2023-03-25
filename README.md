@@ -6,7 +6,7 @@
 ```
 + Backup a new workload into the system
 ```
-./cDedup --task write --InputFile [backup workload] --ChunkingMethod fsc --Size [4 or 8 or 16]
+./cDedup --task write --InputFile [backup workload] --ChunkingMethod fsc --Size [4 or 8 or 16] --MerkleTree [yes or no]
 ```
 + Restore a workload of from the system
 ```
@@ -19,7 +19,7 @@
 ```
 + Backup a new workload into the system
 ```
-./cDedup --task write --InputFile [backup workload] --ChunkingMethod cdc
+./cDedup --task write --InputFile [backup workload] --ChunkingMethod cdc --Size [4 or 8 or 16] --Normal [0 or 1 or 2 or 3] --MerkleTree [yes or no]
 ```
 + Restore a workload of from the system
 ```
