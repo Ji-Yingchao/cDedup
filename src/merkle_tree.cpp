@@ -94,7 +94,7 @@ void MerkleTree::buildTree(std::vector<L0_node>& nodes){
     }
 }
 
-void MerkleTree::getNonDuplicateNodes(){
+void MerkleTree::markNonDuplicateNodes(){
     if(this->tree.back().size() > 1){
         // 默认的L6层节点不止一个，直接报错
         printf("ERROR, L6 size > 1\n");
@@ -134,8 +134,9 @@ void MerkleTree::walk(LP_node* root){
 # define L0_META_DATA_SIZE 30 
 bool MerkleTree::lookupL0(const char* hash){
     int fd = open(this->meta_path[0], O_RDONLY, 777);
-    char hash_cache[L0_META_DATA_SIZE*100] = {0};
-    int n = read(fd, hash_cache, L0_META_DATA_SIZE*100);
+    int hash_cache_length = L0_META_DATA_SIZE*1024*1024;
+    char *hash_cache = (char*)malloc(sizeof(char)*hash_cache_length);
+    int n = read(fd, hash_cache, hash_cache_length);
     
     for(int i=0; i<=n/L0_META_DATA_SIZE - 1; i++){
         for(int j=0; j<=SHA_DIGEST_LENGTH-1; j++){
@@ -149,14 +150,16 @@ bool MerkleTree::lookupL0(const char* hash){
     }
 
     close(fd);
+    free(hash_cache);
     return false;
 }
 
 // char和unsigned char不能比较！！！
 bool MerkleTree::lookupLP(const char* hash, int P){
     int fd = open(this->meta_path[P], O_RDONLY, 777);
-    char hash_cache[SHA_DIGEST_LENGTH * 100] = {0};
-    int n = read(fd, hash_cache, SHA_DIGEST_LENGTH * 100);
+    int hash_cache_length = SHA_DIGEST_LENGTH*1024*1024;
+    char *hash_cache = (char*)malloc(sizeof(char)*hash_cache_length);
+    int n = read(fd, hash_cache, hash_cache_length);
     
     for(int i=0; i<=n/SHA_DIGEST_LENGTH - 1; i++){
         for(int j=0; j<=SHA_DIGEST_LENGTH-1; j++){
@@ -170,6 +173,7 @@ bool MerkleTree::lookupLP(const char* hash, int P){
     }
 
     close(fd);
+    free(hash_cache);
     return false;
 }
 

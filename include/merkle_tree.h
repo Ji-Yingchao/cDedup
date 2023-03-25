@@ -57,5 +57,5 @@ class MerkleTree{
         }
 
         void buildTree(std::vector<L0_node>& nodes);
-        void getNonDuplicateNodes();
+        void markNonDuplicateNodes();
 };

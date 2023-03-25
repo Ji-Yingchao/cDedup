@@ -477,7 +477,7 @@ int main(int argc, char** argv){
 
             mt = new MerkleTree(merkleMeta, 10, 6, L0_nodes);
             mt->buildTree(L0_nodes);
-            mt->getNonDuplicateNodes();
+            mt->markNonDuplicateNodes();
             
             // save non-duplicate chunks to container
             for(auto &x: L0_nodes){
