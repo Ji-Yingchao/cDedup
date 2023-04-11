@@ -14,12 +14,10 @@
 #include "fastcdc.h"
 #include "full_file_deduplicater.h"
 #include "merkle_tree.h"
+#include "MetadataManager.h"
 
 #define FILE_CACHE (1024*1024*1024)
 #define CONTAINER_SIZE (4*1024*1024) //4MB容器
-
-// <SHA1 20B, ContainerNumber 2B, offset 4B, size 2B, ContainerInnerIndex 2B>
-#define META_DATA_SIZE 30
 
 char* fingerprintsFilePath = "/home/cyf/cDedup/fingerprints.meta";
 char* fileRecipesPath = "/home/cyf/cDedup/FileRecipes";
@@ -107,14 +105,14 @@ bool streamCmp(const unsigned char* s1, const unsigned char* s2, int len){
 class Chunk{
     private:
         uint8_t fingerprint[SHA_DIGEST_LENGTH];
-        uint16_t ContainerNumber;
+        uint32_t ContainerNumber;
         uint32_t ContainerInnerOffset;
         uint16_t size;
         uint16_t ContainerInnerIndex;
     public:
         Chunk(){}
         uint16_t getSize(){return size;}
-        uint16_t getConNum(){return ContainerNumber;}
+        uint32_t getConNum(){return ContainerNumber;}
         uint32_t getInnerOffset(){return ContainerInnerOffset;}
         uint8_t* getFingerprint(){return fingerprint;}
         void initWithCompact(unsigned char*);
@@ -202,7 +200,7 @@ std::string Chunk::getDataFromDisk(){
 // ---class chunk END
 
 
-unsigned int getFilesNum(char* dirPath){
+uint32_t getFilesNum(char* dirPath){
     int ans = 0;
     DIR *dir = opendir(dirPath);
     if(!dir){
@@ -307,11 +305,10 @@ int FSC_16(unsigned char *p, int n) {
 }
 
 void saveChunkToContainer(unsigned int& container_buf_pointer, unsigned char* container_buf, 
-                          uint16_t& container_index, uint32_t& container_inner_offset, uint16_t& container_inner_index,
+                          uint32_t& container_index, uint32_t& container_inner_offset, uint16_t& container_inner_index,
                           int chunk_length, int file_offset, unsigned char* file_cache, void* SHA_buf){
     // flush
     if(container_buf_pointer + chunk_length >= CONTAINER_SIZE){
-        
         saveContainer(container_index, container_buf, container_buf_pointer, containersPath);
         memset(container_buf, 0, CONTAINER_SIZE);
         container_index++;
@@ -323,18 +320,13 @@ void saveChunkToContainer(unsigned int& container_buf_pointer, unsigned char* co
     // container buffer
     memcpy(container_buf + container_buf_pointer, 
             file_cache + file_offset, chunk_length);
-
-    // insert meta data
-    Chunk new_chunk;
-    new_chunk.initWithValue((unsigned char*)SHA_buf, container_index, container_inner_offset, chunk_length, container_inner_index);
-    new_chunk.saveMetaToDisk();
-    
-    container_inner_offset += chunk_length;
-    container_buf_pointer += chunk_length;
-    container_inner_index ++;
 }
 
 int main(int argc, char** argv){
+    // 一次任务的总时间
+    struct timeval t0, t1;
+    gettimeofday(&t0, NULL);
+    
     setuid(0);
     enum TASK_TYPE task_type = NOT_CHOOSED;
     enum CHUNKING_METHOD chunking_method = CDC;
@@ -429,7 +421,13 @@ int main(int argc, char** argv){
     }
 
     if(task_type == TASK_WRITE){
+        GlobalMetadataManagerPtr = new MetadataManager(fingerprintsFilePath);
+
         int current_version = getFilesNum(fileRecipesPath);
+        
+        if(current_version != 0){
+            GlobalMetadataManagerPtr->load();
+        }
 
         int fd = open(input_file_path, O_RDONLY, 777);
         if(fd < 0){
@@ -437,25 +435,33 @@ int main(int argc, char** argv){
             exit(-1);
         }
 
-        int dedup_chunks = 0;
-        int sum_chunks = 0;
         unsigned char* file_cache = (unsigned char*)malloc(FILE_CACHE);
+        struct SHA1FP sha1_fp;
         unsigned char SHA_buf[SHA_DIGEST_LENGTH]={0};
         unsigned char meta_data_buf[META_DATA_SIZE]={0};
         std::vector<std::string> file_recipe; // 保存这个文件所有块的指纹
-        uint16_t container_index = getFilesNum(containersPath);
+
+        // metadata entry(except FP)
+        uint32_t container_index = getFilesNum(containersPath);
         uint32_t container_inner_offset = 0;
+        uint16_t chunk_length = 0;
         uint16_t container_inner_index = 0;
+
         unsigned char container_buf[CONTAINER_SIZE]={0};
         unsigned int container_buf_pointer = 0;
         uint32_t n_read = read(fd, file_cache, FILE_CACHE);
         uint32_t file_offset = 0;
-        uint16_t chunk_length = 0;
+        
+        MerkleTree *mt = nullptr;
+        struct ENTRY_VALUE entry_value;
+
+        // 重删统计
+        int dedup_chunks = 0;
+        int sum_chunks = 0;
         int sum_size = 0;
         int dedup_size = 0;
         int hash_collision_sum = 0;
-        MerkleTree *mt = nullptr;
-        
+
         if(n_read < 0){
             printf("read file error, id %d, %s\n", errno, strerror(errno));
             exit(-1);
@@ -503,66 +509,60 @@ int main(int argc, char** argv){
             chunk_length = chunking(file_cache + file_offset, n_read - file_offset);
             
             // Compute hash
-            memset(SHA_buf, 0, SHA_DIGEST_LENGTH);
-            SHA1(file_cache + file_offset, chunk_length, SHA_buf);
+            memset(&sha1_fp, 0, sizeof(struct SHA1FP));
+            SHA1(file_cache + file_offset, chunk_length, (uint8_t*)&sha1_fp);
 
             // Insert fingerprint into file recipe
-            file_recipe.push_back(std::string((char*)SHA_buf, SHA_DIGEST_LENGTH));
+            file_recipe.push_back(std::string((char*)&sha1_fp, sizeof(struct SHA1FP)));
 
             // Statistic
             sum_chunks ++;
             sum_size += chunk_length;
             
             // lookup fingerprint
-            Chunk* search_chunk = Chunk::lookupChunkMeta(SHA_buf);
+            LookupResult lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp);
 
-            if(search_chunk == nullptr){
+            // 
+            if(lookup_result == Unique){
+                // save chunk itself
                 saveChunkToContainer(container_buf_pointer, container_buf, 
                                      container_index, container_inner_offset, container_inner_index,
                                      chunk_length, file_offset, file_cache, SHA_buf);
-            }else{  
-                //遇到问题，块的长度不一样，但hash一样
-                if(chunk_length != search_chunk->getSize()){
-                    printf("Error hash collision with different chunk SIZE\n");
-                }else{
-                    if(!streamCmp(file_cache+file_offset, (unsigned char*)search_chunk->getDataFromDisk().data(), chunk_length)){
-                        hash_collision_sum++;
-                        printf("Error hash collision with different chunk DATA\n");
-                        printf("coming hash: ");
-                        printBytes(SHA_buf, SHA_DIGEST_LENGTH);
-                        //演算
-                        unsigned char SHA_saved_buf[SHA_DIGEST_LENGTH]={0};
-                        SHA1((unsigned char*)search_chunk->getDataFromDisk().data(), search_chunk->getDataFromDisk().size(), SHA_saved_buf);
-                        printf("saved recomputed hash: ");
-                        printBytes(SHA_saved_buf, SHA_DIGEST_LENGTH);
-                        printf("saved hash: ");
-                        printBytes(search_chunk->getFingerprint(), SHA_DIGEST_LENGTH);
-                    } 
-                }
+
+                // save chunk metadata
+                entry_value.container_number = container_index;
+                entry_value.offset = container_inner_offset;
+                entry_value.chunk_length = chunk_length;
+                entry_value.container_inner_index = container_inner_index;
+                GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value);
                 
+            }else if(lookup_result == Dedup){  
+                // 重删统计
                 dedup_chunks ++;
                 dedup_size += chunk_length;
-                delete search_chunk;
+
+                // 可能遇到哈希碰撞
+                // TODO
             }
             file_offset += chunk_length;
         }
 
     writend:       
-        // 最后一个container
+        //  flush最后一个container
         if(container_buf_pointer > 0)
             saveContainer(container_index, container_buf, container_buf_pointer, containersPath);
         
-        // 唯一的一个file recipe
+        // flush file_recipe
         saveFileRecipe(file_recipe, fileRecipesPath);
 
-        // 重删统计
+        // 写文件 - 重删统计
         printf("-- Dedup statistics -- \n");
-        printf("Hash collision num %d\n", hash_collision_sum);
-        printf("Sum chunks %d\n",         sum_chunks);
-        printf("Sum size %d\n",           sum_size);
-        printf("Dedup chunks %d\n",       dedup_chunks);
-        printf("Dedup size %d\n",         dedup_size);
-        printf("Deduplication Ratio %.2f%\n",     double(dedup_chunks) / sum_chunks *100);
+        printf("Hash collision num %d\n", hash_collision_sum); // should be zero
+        printf("Sum chunks num %d\n",     sum_chunks);
+        printf("Sum data size %d\n",      sum_size);
+        printf("Dedup chunks num %d\n",   dedup_chunks);
+        printf("Dedup data size %d\n",    dedup_size);
+        printf("Dedup Ratio %.2f%\n",     double(dedup_chunks) / sum_chunks *100);
 
     }else if(task_type == TASK_RESTORE){
         if(!fileRecipeExist(restore_version)){
@@ -607,5 +607,10 @@ int main(int argc, char** argv){
         }
         close(fd);
     }
+
+    gettimeofday(&t1, NULL);
+    uint64_t single_dedup = (t1.tv_sec - t0.tv_sec) * 1000000 + t1.tv_usec - t0.tv_usec;
+    printf("Backup duration:%lu us\n", single_dedup);
+    
     return 0;
 }

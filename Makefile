@@ -4,7 +4,8 @@ SRC = main.cpp ./src/fastcdc.cpp ./src/full_file_deduplicater.cpp ./src/merkle_t
 EXE_NAME = cDedup
 
 amazing:
-	$(CC)  $(SRC) $(LIB) -o $(EXE_NAME) -g -I ./include
+# 	$(CC)  $(SRC) $(LIB) -o $(EXE_NAME) -pg -I ./include
+	$(CC)  $(SRC) $(LIB) -o $(EXE_NAME) -I ./include
 
 clean:
 	rm $(EXE_NAME) \
