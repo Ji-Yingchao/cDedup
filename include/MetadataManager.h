@@ -16,7 +16,7 @@ enum LookupResult {
     Dedup,
 };
 
-struct SHA1FP {
+struct __attribute__ ((__packed__)) SHA1FP {
     // 20 bytes
     uint64_t fp1;
     uint32_t fp2, fp3, fp4;

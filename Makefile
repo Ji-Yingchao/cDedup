@@ -1,11 +1,11 @@
 CC = gcc
 LIB = -lcrypto -lz -lstdc++
-SRC = main.cpp ./src/fastcdc.cpp ./src/full_file_deduplicater.cpp ./src/merkle_tree.cpp
+SRC = main.cpp ./src/fastcdc.cpp ./src/full_file_deduplicater.cpp ./src/merkle_tree.cpp \
+	  ./src/MetadataManager.cpp
 EXE_NAME = cDedup
 
 amazing:
-# 	$(CC)  $(SRC) $(LIB) -o $(EXE_NAME) -pg -I ./include
-	$(CC)  $(SRC) $(LIB) -o $(EXE_NAME) -I ./include
+	$(CC)  $(SRC) $(LIB) -o $(EXE_NAME) -g -I ./include
 
 clean:
 	rm $(EXE_NAME) \

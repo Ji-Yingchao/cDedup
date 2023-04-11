@@ -535,7 +535,12 @@ int main(int argc, char** argv){
                 entry_value.chunk_length = chunk_length;
                 entry_value.container_inner_index = container_inner_index;
                 GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value);
-                
+
+                // 
+                container_inner_offset += chunk_length;
+                container_buf_pointer += chunk_length;
+                container_inner_index ++;
+
             }else if(lookup_result == Dedup){  
                 // 重删统计
                 dedup_chunks ++;
@@ -555,8 +560,11 @@ int main(int argc, char** argv){
         // flush file_recipe
         saveFileRecipe(file_recipe, fileRecipesPath);
 
+        // save metadata entry
+        GlobalMetadataManagerPtr->save();
+
         // 写文件 - 重删统计
-        printf("-- Dedup statistics -- \n");
+        printf("-----------------------Dedup statics----------------------\n");
         printf("Hash collision num %d\n", hash_collision_sum); // should be zero
         printf("Sum chunks num %d\n",     sum_chunks);
         printf("Sum data size %d\n",      sum_size);
@@ -609,8 +617,8 @@ int main(int argc, char** argv){
     }
 
     gettimeofday(&t1, NULL);
-    uint64_t single_dedup = (t1.tv_sec - t0.tv_sec) * 1000000 + t1.tv_usec - t0.tv_usec;
-    printf("Backup duration:%lu us\n", single_dedup);
+    uint64_t single_dedup_time_us = (t1.tv_sec - t0.tv_sec) * 1000000 + t1.tv_usec - t0.tv_usec;
+    printf("Backup duration:%lu us\n", single_dedup_time_us);
     
     return 0;
 }
