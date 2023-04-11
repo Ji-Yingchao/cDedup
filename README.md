@@ -10,7 +10,7 @@
 ```
 + Restore a workload of from the system
 ```
-./cDedup --Task restore --RestorePath [path to restore] --RestoreRecipe [which version to restore(1 ~ no. of the last retained version)]
+./cDedup --Task restore --RestorePath [path to restore] --RestoreVersion [which version to restore(1 ~ no. of the last retained version)]
 ```
 
 ### CDC deduplication Usage
@@ -23,7 +23,7 @@
 ```
 + Restore a workload of from the system
 ```
-./cDedup --Task restore --RestorePath [path to restore] --RestoreRecipe [which version to restore(1 ~ no. of the last retained version)]
+./cDedup --Task restore --RestorePath [path to restore] --RestoreVersion [which version to restore(1 ~ no. of the last retained version)]
 ```
 
 ### Full file deduplication Usage
