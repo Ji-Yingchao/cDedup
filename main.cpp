@@ -16,9 +16,7 @@
 #include "merkle_tree.h"
 #include "MetadataManager.h"
 #include "ContainerCache.h"
-
-#define FILE_CACHE (1024*1024*1024)
-#define CONTAINER_SIZE (4*1024*1024) //4MB容器
+#include "general.h"
 
 char* fingerprintsFilePath = "/home/cyf/cDedup/fingerprints.meta";
 char* fileRecipesPath = "/home/cyf/cDedup/FileRecipes";
@@ -108,6 +106,7 @@ bool streamCmp(const unsigned char* s1, const unsigned char* s2, int len){
             return false;
     return true;
 }
+
 // class chunk START ---
 class Chunk{
     private:

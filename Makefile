@@ -1,7 +1,7 @@
 CC = gcc
 LIB = -lcrypto -lz -lstdc++
 SRC = main.cpp ./src/fastcdc.cpp ./src/full_file_deduplicater.cpp ./src/merkle_tree.cpp \
-	  ./src/MetadataManager.cpp
+	  ./src/MetadataManager.cpp ./src/ContainerCache.cpp
 EXE_NAME = cDedup
 
 amazing:

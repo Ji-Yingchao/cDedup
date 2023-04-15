@@ -4,12 +4,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <unordered_map>
-
-#define FILE_CACHE (1024*1024*1024)
-// <SHA1 20B, ContainerNumber 4B, offset 4B, size 2B, ContainerInnerIndex 2B>
-#define META_DATA_SIZE 32
-#define SHA1_LENGTH 20
-#define VALUE_LENGTH 12
+#include "general.h"
 
 enum LookupResult {
     Unique,
