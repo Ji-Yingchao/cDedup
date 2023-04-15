@@ -55,9 +55,11 @@ class MetadataManager {
         int load();
         LookupResult dedupLookup(const SHA1FP &sha1);
         int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value);
+        ENTRY_VALUE getEntry(const SHA1FP sha1);
 
     private:
         std::string metadata_file_path;
+        // FP-index
         std::unordered_map<SHA1FP, ENTRY_VALUE, TupleHasher, TupleEqualer> fp_table_origin;
         std::unordered_map<SHA1FP, ENTRY_VALUE, TupleHasher, TupleEqualer> fp_table_added;
 };

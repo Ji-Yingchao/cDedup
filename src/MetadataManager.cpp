@@ -64,3 +64,7 @@ int MetadataManager::addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value){
     this->fp_table_added.emplace(sha1, value);
     return 0;
 }
+
+ENTRY_VALUE MetadataManager::getEntry(const SHA1FP sha1){
+    return this->fp_table_origin[sha1];
+}

@@ -146,41 +146,6 @@ uint32_t MaxSize;
 uint32_t fastcdc_avg_size;
 uint32_t MinSize_divide_by_2;
 
-int sameCount = 0;
-int tmpCount = 0;
-int smalChkCnt = 0;  //记录小于8KB的分块
-
-int chunk0_4 = 0, chunk4_8 = 0, chunk8_12 = 0;
-int chunk12_16 = 0, chunk16_20 = 0, chunk20_24 = 0;
-int chunk24_28 = 0, chunk28_32 = 0;
-float chunk_summ = 0;
-
-void insertChunkLength(int chunkLength){
-    if(chunkLength <= 4*1024)
-        chunk0_4++;
-    if(4*1024 <= chunkLength && chunkLength <= 8*1024)
-        chunk4_8++;
-    if(8*1024 <= chunkLength && chunkLength <= 12*1024)
-        chunk8_12++;
-    if(12*1024 <= chunkLength && chunkLength <= 16*1024)
-        chunk12_16++;
-    if(16*1024 <= chunkLength && chunkLength <= 20*1024)
-        chunk16_20++;
-    if(20*1024 <= chunkLength && chunkLength <= 24*1024)
-        chunk20_24++;
-    if(24*1024 <= chunkLength && chunkLength <= 28*1024)
-        chunk24_28++;
-    if(28*1024 <= chunkLength && chunkLength <= 32*1024)
-        chunk28_32++;
-}
-
-void printChunkLengthStatistic(){
-    printf("%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f\n",
-    chunk0_4/chunk_summ*100, chunk4_8/chunk_summ*100, chunk8_12/chunk_summ*100,
-    chunk12_16/chunk_summ*100, chunk16_20/chunk_summ*100, chunk20_24/chunk_summ*100,
-    chunk24_28/chunk_summ*100, chunk28_32/chunk_summ*100);
-}
-
 // functions
 void fastCDC_init(int fas, int NC_level) {
     unsigned char md5_digest[16];
@@ -280,4 +245,17 @@ int FastCDC_without_NC(unsigned char *p, int n) {
             return i;
     }
     return n;
+}
+
+// FSC
+int FSC_4(unsigned char *p, int n) {
+    return 4*1024;
+}
+
+int FSC_8(unsigned char *p, int n) {
+    return 8*1024;
+}
+
+int FSC_16(unsigned char *p, int n) {
+    return 16*1024;
 }
