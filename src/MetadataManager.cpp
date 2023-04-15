@@ -6,7 +6,7 @@
 #include <string.h>
 
 int MetadataManager::load(){
-    printf("-----------------------Loading index-----------------------\n");
+    printf("-----------------------Loading FP-index-----------------------\n");
     printf("Loading index..\n");
 
     unsigned char* metadata_cache = (unsigned char*)malloc(FILE_CACHE);
@@ -29,7 +29,7 @@ int MetadataManager::load(){
 }
 
 int MetadataManager::save(){
-    printf("-----------------------Saving index-----------------------\n");
+    printf("-----------------------Saving FP-index-----------------------\n");
     printf("Saving index..\n");
 
     int fd = open(this->metadata_file_path.c_str(), O_APPEND | O_RDWR);

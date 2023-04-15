@@ -61,7 +61,7 @@ struct option long_options[] = {
     { "Size", required_argument, NULL, 's' }, //used for fsc size or fastcdc avg size
     { "Normal", required_argument, NULL, 'n' }, //used for fastcdc normalized level
     { "MerkleTree", required_argument, NULL, 'm' }, 
-    { "RestoreMethod", required_argument, NULL, 'm' }, 
+    { "RestoreMethod", required_argument, NULL, 100 }, 
     { 0, 0, 0, 0 }
 };
 
@@ -96,6 +96,17 @@ bool yesNoTrans(char* s){
         return false;
     }else{
         printf("Not support yes no type:%s\n", s);
+        exit(-1);
+    }
+}
+
+RESTORE_METHOD restoreMethodTrans(char* s){
+    if(strcmp(s, "naive") == 0){
+        return NAIVE_RESTORE;
+    }else if (strcmp(s, "container") == 0){
+        return CONTAINER_CACHE;
+    }else{
+        printf("Not support restore method:%s\n", s);
         exit(-1);
     }
 }
@@ -182,10 +193,10 @@ void Chunk::saveMetaToDisk(){
 
     unsigned char meta_buf[META_DATA_SIZE]={0};
     memcpy(meta_buf, this->fingerprint,  SHA_DIGEST_LENGTH);
-    memcpy(meta_buf+SHA_DIGEST_LENGTH, &this->ContainerNumber,  2);
-    memcpy(meta_buf+SHA_DIGEST_LENGTH+2, &this->ContainerInnerOffset,  4);
-    memcpy(meta_buf+SHA_DIGEST_LENGTH+2+4, &this->size,  2);
-    memcpy(meta_buf+SHA_DIGEST_LENGTH+2+4+2, &this->ContainerInnerIndex,  2);
+    memcpy(meta_buf+SHA_DIGEST_LENGTH, &this->ContainerNumber,  4);
+    memcpy(meta_buf+SHA_DIGEST_LENGTH+4, &this->ContainerInnerOffset,  4);
+    memcpy(meta_buf+SHA_DIGEST_LENGTH+4+4, &this->size,  2);
+    memcpy(meta_buf+SHA_DIGEST_LENGTH+4+4+2, &this->ContainerInnerIndex,  2);
 
     if(write(fd, meta_buf, META_DATA_SIZE) != META_DATA_SIZE){
         printf("saveMetaToDisk write error, id %d, %s\n", errno, strerror(errno));
@@ -310,6 +321,13 @@ void saveChunkToContainer(unsigned int& container_buf_pointer, unsigned char* co
             file_cache + file_offset, chunk_length);
 }
 
+void flushAssemblingBuffer(int fd, unsigned char* buf, int len){
+    if(write(fd, buf, len) != len){
+        printf("Restore, write file error!!!\n");
+        exit(-1);
+    }
+}
+
 int main(int argc, char** argv){
     // 一次任务的总时间
     struct timeval t0, t1;
@@ -358,6 +376,9 @@ int main(int argc, char** argv){
                 break;
             case 'm':
                 merkle_tree = yesNoTrans(optarg);
+                break;
+            case 100:
+                restore_method = restoreMethodTrans(optarg);
                 break;
             default:
                 printf("Not support option: %c\n", c);
@@ -432,9 +453,9 @@ int main(int argc, char** argv){
 
         unsigned char container_buf[CONTAINER_SIZE]={0};
         unsigned int container_buf_pointer = 0;
-        uint32_t n_read = read(fd, file_cache, FILE_CACHE);
         uint32_t file_offset = 0;
-        
+        uint32_t n_read = 0;
+
         MerkleTree *mt = nullptr;
         struct ENTRY_VALUE entry_value;
 
@@ -445,14 +466,11 @@ int main(int argc, char** argv){
         int dedup_size = 0;
         int hash_collision_sum = 0;
 
-        if(n_read < 0){
-            printf("read file error, id %d, %s\n", errno, strerror(errno));
-            exit(-1);
-        }
-        
         // 梅克尔树重删 由于树内部块没参与重删，可能会降低重删率。
+        // 暂不支持大于FILE CACHE大小文件的重删
         if(merkle_tree){
             std::vector<L0_node> L0_nodes;
+            n_read = read(fd, file_cache, FILE_CACHE);
             while(file_offset < n_read){  
                 chunk_length = chunking(file_cache + file_offset, n_read - file_offset);
                 memset(SHA_buf, 0, SHA_DIGEST_LENGTH);
@@ -481,57 +499,64 @@ int main(int argc, char** argv){
                     dedup_size += x.chunk_length;
                 }
             }
-
             goto writend;
         }
 
         // 普通分块重删，来一个块查寻一次，然后把non-duplicate chunk保存到container去
-        while(file_offset < n_read){  
-            // Chunking
-            chunk_length = chunking(file_cache + file_offset, n_read - file_offset);
-            
-            // Compute hash
-            memset(&sha1_fp, 0, sizeof(struct SHA1FP));
-            SHA1(file_cache + file_offset, chunk_length, (uint8_t*)&sha1_fp);
+        for(;;){
+            file_offset = 0;
+            n_read = read(fd, file_cache, FILE_CACHE);
+            if(n_read <= 0){
+                break;
+            }
 
-            // Insert fingerprint into file recipe
-            file_recipe.push_back(std::string((char*)&sha1_fp, sizeof(struct SHA1FP)));
+            while(file_offset < n_read){  
+                // Chunking
+                chunk_length = chunking(file_cache + file_offset, n_read - file_offset);
+                
+                // Compute hash
+                memset(&sha1_fp, 0, sizeof(struct SHA1FP));
+                SHA1(file_cache + file_offset, chunk_length, (uint8_t*)&sha1_fp);
 
-            // Statistic
-            sum_chunks ++;
-            sum_size += chunk_length;
-            
-            // lookup fingerprint
-            LookupResult lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp);
+                // Insert fingerprint into file recipe
+                file_recipe.push_back(std::string((char*)&sha1_fp, sizeof(struct SHA1FP)));
 
-            // 
-            if(lookup_result == Unique){
-                // save chunk itself
-                saveChunkToContainer(container_buf_pointer, container_buf, 
-                                     container_index, container_inner_offset, container_inner_index,
-                                     chunk_length, file_offset, file_cache, SHA_buf);
-
-                // save chunk metadata
-                entry_value.container_number = container_index;
-                entry_value.offset = container_inner_offset;
-                entry_value.chunk_length = chunk_length;
-                entry_value.container_inner_index = container_inner_index;
-                GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value);
+                // Statistic
+                sum_chunks ++;
+                sum_size += chunk_length;
+                
+                // lookup fingerprint
+                LookupResult lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp);
 
                 // 
-                container_inner_offset += chunk_length;
-                container_buf_pointer += chunk_length;
-                container_inner_index ++;
+                if(lookup_result == Unique){
+                    // save chunk itself
+                    saveChunkToContainer(container_buf_pointer, container_buf, 
+                                        container_index, container_inner_offset, container_inner_index,
+                                        chunk_length, file_offset, file_cache, SHA_buf);
 
-            }else if(lookup_result == Dedup){  
-                // 重删统计
-                dedup_chunks ++;
-                dedup_size += chunk_length;
+                    // save chunk metadata
+                    entry_value.container_number = container_index;
+                    entry_value.offset = container_inner_offset;
+                    entry_value.chunk_length = chunk_length;
+                    entry_value.container_inner_index = container_inner_index;
+                    GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value);
 
-                // 可能遇到哈希碰撞
-                // TODO
+                    // 
+                    container_inner_offset += chunk_length;
+                    container_buf_pointer += chunk_length;
+                    container_inner_index ++;
+
+                }else if(lookup_result == Dedup){  
+                    // 重删统计
+                    dedup_chunks ++;
+                    dedup_size += chunk_length;
+
+                    // 可能遇到哈希碰撞
+                    // TODO
+                }
+                file_offset += chunk_length;
             }
-            file_offset += chunk_length;
         }
 
     writend:       
@@ -555,6 +580,8 @@ int main(int argc, char** argv){
         printf("Dedup Ratio %.2f%\n",     double(dedup_chunks) / sum_chunks *100);
 
     }else if(task_type == TASK_RESTORE){
+        int restore_size = 0;
+
         if(!fileRecipeExist(restore_version)){
             printf("Version %d not exist!\n", restore_version);
             return 0;
@@ -587,6 +614,12 @@ int main(int argc, char** argv){
                 delete ck;
             }   
         }else if(restore_method == CONTAINER_CACHE){
+            int fd = open(restore_file_path, O_RDWR | O_CREAT, 777);
+            if(fd < 0){
+                printf("无法写文件!!! %s\n", strerror(errno));
+                exit(-1);
+            }
+
             ContainerCache cc(containersPath, 128);
 
             for(auto &x : file_recipe){
@@ -606,31 +639,35 @@ int main(int argc, char** argv){
                     exit(-1);
                 }
 
+                if(write_buffer_offset + ck_data.size() >= FILE_CACHE){
+                    flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
+                    write_buffer_offset = 0;
+                }
+
                 memcpy(assembling_buffer + write_buffer_offset, 
                     ck_data.data(), ck_data.size());
                 write_buffer_offset += ev.chunk_length;
+
+                restore_size += ev.chunk_length;
             }
+            
+            flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
+            close(fd);
         }else{
             printf("不支持的恢复算法 %d\n", restore_method);
             exit(-1);
         }
 
-        // flush Assembling Buffer
-        int fd = open(restore_file_path, O_RDWR | O_CREAT, 777);
-        if(fd < 0){
-            printf("无法写文件!!! %s\n", strerror(errno));
-            exit(-1);
-        }
-        if(write(fd, assembling_buffer, write_buffer_offset) != write_buffer_offset){
-            printf("Restore, write file error!!!\n");
-            exit(-1);
-        }
-        close(fd);
+        printf("-----------------------Restore statics----------------------\n");
+        printf("Restore size %d\n", restore_size);
     }
 
     gettimeofday(&t1, NULL);
     uint64_t single_dedup_time_us = (t1.tv_sec - t0.tv_sec) * 1000000 + t1.tv_usec - t0.tv_usec;
-    printf("Backup duration:%lu us\n", single_dedup_time_us);
+    if(task_type == TASK_WRITE)
+        printf("Backup duration:%lu us\n", single_dedup_time_us);
+    else if(task_type == TASK_RESTORE)
+        printf("Restore duration:%lu us\n", single_dedup_time_us);
     
     return 0;
 }

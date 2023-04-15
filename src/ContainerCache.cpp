@@ -7,14 +7,14 @@ std::string ContainerCache::getChunkData(ENTRY_VALUE ev){
     auto numberIter = this->container_index_set.find(ev.container_number);
     if(numberIter != this->container_index_set.end()){
         //cache hit
-        return cache[ev.container_number];
+        return std::string(cache[ev.container_number], ev.offset, ev.chunk_length);
     }else{
         //cache miss
         if(container_index_queue.size() >= this->cache_max_size){
             evictContainerFIFO();
         }
         this->loadContainer(ev.container_number);
-        return cache[ev.container_number];
+        return std::string(cache[ev.container_number], ev.offset, ev.chunk_length);
     }
 }
 
@@ -28,8 +28,8 @@ void ContainerCache::loadContainer(int container_index){
     int fd = open(container_name.data(), O_RDONLY);
 
     memset(this->container_buf, 0, CONTAINER_SIZE);
-    read(fd, this->container_buf, CONTAINER_SIZE); // 可能塞不满
-    std::string content(this->container_buf , CONTAINER_SIZE);
+    int n = read(fd, this->container_buf, CONTAINER_SIZE); // 可能塞不满
+    std::string content(this->container_buf , n);
 
     this->cache[container_index] = content;
     close(fd);
