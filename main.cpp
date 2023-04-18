@@ -330,6 +330,7 @@ void flushAssemblingBuffer(int fd, unsigned char* buf, int len){
 
 int main(int argc, char** argv){
     // 一次任务的总时间
+    // MFDedup并没有计算load FP-index的时间
     struct timeval t0, t1;
     gettimeofday(&t0, NULL);
     
@@ -650,7 +651,7 @@ int main(int argc, char** argv){
 
                 restore_size += ev.chunk_length;
             }
-            
+
             flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
             close(fd);
         }else{
