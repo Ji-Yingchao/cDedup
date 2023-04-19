@@ -1,5 +1,6 @@
 // full file deduplicater
 #include <iostream>
+#include "general.h"
 
 #define FULL_FILE_CACHE (1024*1024*1024)
 #define FILE_FINGERPRINTS_CACHE (20*100)

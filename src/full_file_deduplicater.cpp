@@ -9,12 +9,13 @@
 
 /*
     计算全文件哈希
+    暂时不能计算超过FILE_CACHE大小的文件
 */
 void FullFileDeduplicater::compute_file_hash(char* input_file_path, unsigned char* hash){
-    unsigned char full_file_cache[FILE_FINGERPRINTS_CACHE] = {0};
+    unsigned char * full_file_cache = (unsigned char *)malloc(FILE_CACHE);
     int fd = open(input_file_path, O_RDONLY, 777);
-    read(fd, full_file_cache, FILE_FINGERPRINTS_CACHE);
-    SHA1(full_file_cache, FILE_FINGERPRINTS_CACHE, hash);
+    int n_read = read(fd, full_file_cache, FILE_CACHE);
+    SHA1(full_file_cache, n_read, hash);
     close(fd);
 }
 
