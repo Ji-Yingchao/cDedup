@@ -16,6 +16,7 @@
 #include "merkle_tree.h"
 #include "MetadataManager.h"
 #include "ContainerCache.h"
+#include "ChunkCache.h"
 #include "general.h"
 
 char* fingerprintsFilePath = "/home/cyf/cDedup/fingerprints.meta";
@@ -621,7 +622,8 @@ int main(int argc, char** argv){
                 exit(-1);
             }
 
-            ContainerCache cc(containersPath, 128);
+            // ContainerCache cc(containersPath, 128);
+            ChunkCache cc(containersPath, 128);
 
             for(auto &x : file_recipe){
                 SHA1FP fp;
