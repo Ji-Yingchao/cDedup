@@ -1,10 +1,11 @@
 #include"MetadataManager.h"
+#include"Cache.h"
 #include<map>
 #include<vector>
 #include<utility>
 
 
-class ChunkCache{
+class ChunkCache : public Cache{
     public:
         ChunkCache(char* containersPath, int cache_max_size){
             LRUtimestamp = 0;
@@ -21,7 +22,7 @@ class ChunkCache{
             return (uint64_t(ev.container_number) << 32) + ev.container_inner_index;
         }
         
-        std::string getChunkData(ENTRY_VALUE ev);
+        virtual std::string getChunkData(ENTRY_VALUE ev);
 
     private:
         std::string containers_path;

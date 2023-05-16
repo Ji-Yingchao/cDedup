@@ -48,8 +48,10 @@ enum CHUNKING_METHOD{
 };
 
 enum RESTORE_METHOD{
-    NAIVE_RESTORE,//无缓冲模式   
+    NAIVE_RESTORE,  //无缓冲模式   
     CONTAINER_CACHE,//基于容器的缓冲
+    CHUNK_CACHE,    //基于数据块的缓冲
+    FAA,
 };
 
 struct option long_options[] = {
@@ -106,6 +108,8 @@ RESTORE_METHOD restoreMethodTrans(char* s){
         return NAIVE_RESTORE;
     }else if (strcmp(s, "container") == 0){
         return CONTAINER_CACHE;
+    }else if (strcmp(s, "chunk") == 0){
+        return CHUNK_CACHE;
     }else{
         printf("Not support restore method:%s\n", s);
         exit(-1);
@@ -615,16 +619,20 @@ int main(int argc, char** argv){
                 write_buffer_offset += ck_data.size();
                 delete ck;
             }   
-        }else if(restore_method == CONTAINER_CACHE){
+        }else if(restore_method == CONTAINER_CACHE || restore_method == CHUNK_CACHE){
             int fd = open(restore_file_path, O_RDWR | O_CREAT, 777);
             if(fd < 0){
                 printf("无法写文件!!! %s\n", strerror(errno));
                 exit(-1);
             }
 
-            // ContainerCache cc(containersPath, 128);
-            ChunkCache cc(containersPath, 128);
-
+            Cache* cc;
+            if(restore_method == CONTAINER_CACHE){
+                cc = new ContainerCache(containersPath, 128);
+            }else if(restore_method == CHUNK_CACHE){
+                cc = new ChunkCache(containersPath, 128);
+            }
+            
             for(auto &x : file_recipe){
                 SHA1FP fp;
                 memcpy(&fp, x.data(), sizeof(SHA1FP));
@@ -636,7 +644,7 @@ int main(int argc, char** argv){
                 }
 
                 ENTRY_VALUE ev = GlobalMetadataManagerPtr->getEntry(fp);
-                std::string ck_data = cc.getChunkData(ev);
+                std::string ck_data = cc->getChunkData(ev);
                 if(ck_data.size() != ev.chunk_length){
                     printf("Fatal error size different!!!\n");
                     exit(-1);

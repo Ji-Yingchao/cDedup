@@ -1,10 +1,11 @@
 #include"MetadataManager.h"
+#include"Cache.h"
 #include<unordered_set>
 #include<unordered_map>
 #include<vector>
 #include<queue>
 
-class ContainerCache{
+class ContainerCache : public Cache{
     public:
         ContainerCache(char* containersPath, int cache_max_size){
             this->containers_path = containersPath;
@@ -16,7 +17,7 @@ class ContainerCache{
             free(this->container_buf);
         }
         
-        std::string getChunkData(ENTRY_VALUE ev);
+        virtual std::string getChunkData(ENTRY_VALUE ev);
 
     private:
         std::unordered_set<int> container_index_set;
