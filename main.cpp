@@ -18,6 +18,7 @@
 #include "ContainerCache.h"
 #include "ChunkCache.h"
 #include "general.h"
+#include "FAA.h"
 
 char* fingerprintsFilePath = "/home/cyf/cDedup/fingerprints.meta";
 char* fileRecipesPath = "/home/cyf/cDedup/FileRecipes";
@@ -35,6 +36,7 @@ const char* merkleMeta[] = {fingerprintsFilePath,
 
 int (*chunking) (unsigned char*p, int n);
 
+// Argument
 enum TASK_TYPE{
     TASK_RESTORE,
     TASK_WRITE,
@@ -51,7 +53,8 @@ enum RESTORE_METHOD{
     NAIVE_RESTORE,  //无缓冲模式   
     CONTAINER_CACHE,//基于容器的缓冲
     CHUNK_CACHE,    //基于数据块的缓冲
-    FAA,
+    FAA_FIXED,
+    FAA_ROLLING,
 };
 
 struct option long_options[] = {
@@ -110,11 +113,17 @@ RESTORE_METHOD restoreMethodTrans(char* s){
         return CONTAINER_CACHE;
     }else if (strcmp(s, "chunk") == 0){
         return CHUNK_CACHE;
+    }else if (strcmp(s, "faa_fixed") == 0){
+        return FAA_FIXED;
+    }else if (strcmp(s, "faa_rolling") == 0){
+        return FAA_ROLLING;
     }else{
         printf("Not support restore method:%s\n", s);
         exit(-1);
     }
 }
+// Argument END ---
+
 
 bool streamCmp(const unsigned char* s1, const unsigned char* s2, int len){
     for(int i=0; i<=len-1; i++)
@@ -592,11 +601,11 @@ int main(int argc, char** argv){
             printf("Version %d not exist!\n", restore_version);
             return 0;
         }
-
+        
         unsigned char* assembling_buffer = (unsigned char*)malloc(FILE_CACHE);
         memset(assembling_buffer, 0, FILE_CACHE);
         int write_buffer_offset = 0;
-        
+
         //recipe
         std::vector<std::string> file_recipe = getFileRecipe(restore_version);
 
@@ -664,8 +673,75 @@ int main(int argc, char** argv){
 
             flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
             close(fd);
+        }else if(restore_method == FAA_FIXED){
+            int fd = open(restore_file_path, O_RDWR | O_CREAT, 777);
+            if(fd < 0){
+                printf("无法写文件!!! %s\n", strerror(errno));
+                exit(-1);
+            }
+
+            unsigned char* container_read_buffer = (unsigned char*)malloc(CONTAINER_SIZE);
+            memset(container_read_buffer, 0, CONTAINER_SIZE);
+            int buffered_CID = -1;
+
+            int recipe_offset = 0;
+            std::vector<recipe_buffer_entry> recipe_buffer;
+            int write_length_from_recipe_buffer = 0;
+            int faa_start = 0;
+
+            while(recipe_offset <= file_recipe.size()){
+                // 组建 fast13 faa论文 table1的表-recipe buffer
+                // 但是只需包含CID length start
+                // 根据assembling buffer的大小来组建recipe buffer，所有的chunk size不要超过就行
+                write_length_from_recipe_buffer = 0;
+                faa_start = 0;
+                recipe_buffer.clear();
+                for(; recipe_offset<=file_recipe.size()-1; recipe_offset++){
+                    SHA1FP fp;
+                    memcpy(&fp, file_recipe[recipe_offset].data(), sizeof(SHA1FP));
+                    ENTRY_VALUE ev = GlobalMetadataManagerPtr->getEntry(fp);
+
+                    if(write_length_from_recipe_buffer + ev.chunk_length <= FILE_CACHE){
+                        recipe_buffer.emplace_back(
+                            recipe_buffer_entry(ev.container_number, ev.chunk_length, ev.offset, faa_start, false));
+                        faa_start += ev.chunk_length;
+                        write_length_from_recipe_buffer += ev.chunk_length;
+                    }else{
+                        break;  
+                    }
+                }
+                
+                // 根据recipe buffer填充assembling buffer
+                while(1){
+                    int flag = 0;
+                    for(auto &x : recipe_buffer){
+                        if(!x.used){
+                            buffered_CID = x.CID;
+                            FAA::loadContainer(buffered_CID, containersPath, container_read_buffer);
+                            flag = 1;
+                            break;
+                        }
+                    }
+                    if(flag == 1) break;
+
+                    for(auto &x : recipe_buffer){
+                        if(!x.used){
+                            if(x.CID == buffered_CID){
+                                memcpy(assembling_buffer + x.faa_start, 
+                                container_read_buffer, x.length);
+
+                                restore_size += x.length;
+                            }
+                        }
+                    }
+                }
+
+                flushAssemblingBuffer(fd, assembling_buffer, write_length_from_recipe_buffer);
+            }
+
+            close(fd);
         }else{
-            printf("不支持的恢复算法 %d\n", restore_method);
+            printf("暂不支持的恢复算法 %d\n", restore_method);
             exit(-1);
         }
 
