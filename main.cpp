@@ -689,10 +689,8 @@ int main(int argc, char** argv){
             int write_length_from_recipe_buffer = 0;
             int faa_start = 0;
 
-            while(recipe_offset <= file_recipe.size()){
-                // 组建 fast13 faa论文 table1的表-recipe buffer
-                // 但是只需包含CID length start
-                // 根据assembling buffer的大小来组建recipe buffer，所有的chunk size不要超过就行
+            while(recipe_offset <= file_recipe.size()-1){
+                // 1.从文件recipe取一截到recipe buffer
                 write_length_from_recipe_buffer = 0;
                 faa_start = 0;
                 recipe_buffer.clear();
@@ -711,7 +709,7 @@ int main(int argc, char** argv){
                     }
                 }
                 
-                // 根据recipe buffer填充assembling buffer
+                // 2.根据recipe buffer填充assembling buffer
                 while(1){
                     int flag = 0;
                     for(auto &x : recipe_buffer){
@@ -722,13 +720,14 @@ int main(int argc, char** argv){
                             break;
                         }
                     }
-                    if(flag == 1) break;
+                    if(flag == 0) break;
 
                     for(auto &x : recipe_buffer){
                         if(!x.used){
                             if(x.CID == buffered_CID){
                                 memcpy(assembling_buffer + x.faa_start, 
-                                container_read_buffer, x.length);
+                                container_read_buffer + x.container_offset, x.length);
+                                x.used = true;
 
                                 restore_size += x.length;
                             }
@@ -736,6 +735,7 @@ int main(int argc, char** argv){
                     }
                 }
 
+                // 3.当前recipe buffer已使用完，将faa刷入磁盘
                 flushAssemblingBuffer(fd, assembling_buffer, write_length_from_recipe_buffer);
             }
 
