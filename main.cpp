@@ -139,6 +139,9 @@ void flushAssemblingBuffer(int fd, unsigned char* buf, int len){
 }
 
 int main(int argc, char** argv){
+    // 超级权限
+    setuid(0);
+
     // 参数解析
     Config::getInstance().parse_argument(argc, argv);
     
@@ -147,9 +150,6 @@ int main(int argc, char** argv){
     struct timeval t0, t1;
     gettimeofday(&t0, NULL);
     
-    // 超级权限
-    setuid(0);
-
     if(Config::getInstance().getChunkingMethod() == FULL_FILE){
         FullFileDeduplicater ffd(Config::getInstance().getFullFileStoragePath(), 
                                  Config::getInstance().getFullFileFingerprintsPath());
@@ -182,11 +182,11 @@ int main(int argc, char** argv){
         }
     }else if(Config::getInstance().getChunkingMethod() == FSC){
         int avg_size = Config::getInstance().getAvgChunkSize();
-        if(avg_size == 4){
+        if(avg_size == 4*1024){
             chunking = FSC_4;
-        }else if(avg_size == 8){
+        }else if(avg_size == 8*1024){
             chunking = FSC_8;
-        }else if(avg_size == 16){
+        }else if(avg_size == 16*1024){
             chunking = FSC_16;
         }else{
             printf("Invalid fixed size, the support size is 4 or 8 or 16\n");

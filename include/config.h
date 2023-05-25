@@ -90,9 +90,9 @@ class Config{
             if (fp != NULL) {
                 size_t newLen = fread(source, sizeof(char), 1001, fp);
                 if ( ferror( fp ) != 0 ) {
-                fputs("Error reading file", stderr);
+                    fputs("Error reading file", stderr);
                 } else {
-                source[newLen++] = '\0'; /* Just to be safe. */
+                    source[newLen++] = '\0'; /* Just to be safe. */
                 }
 
                 fclose(fp);
@@ -122,7 +122,7 @@ class Config{
                 }else if (strcmp(name, "Size") == 0) {
                     Config::getInstance().setSize(val_int);
                 }else if (strcmp(name, "Normal") == 0) {
-                    Config::getInstance().setSize(val_int);
+                    Config::getInstance().setNormal(val_int);
                 }else if (strcmp(name, "MerkleTree") == 0) {
                     Config::getInstance().setMerkleTree(valuestring);
                 }else if (strcmp(name, "RestoreMethod") == 0) {
@@ -178,7 +178,7 @@ class Config{
         string MTL1, MTL2, MTL3, MTL4, MTL5, MTL6;
 
         Config() {
-            avg_chunk_size = 4;
+            avg_chunk_size = 4096;
             normal_level = 2;
             merkle_tree = false;
         }

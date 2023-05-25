@@ -1,14 +1,14 @@
 {
     "Task": "write",
-    "InputFile": "/home/cyf/data/linux-5.16.tar",
+    "InputFile": "/home/cyf/data/linux-5.18.tar",
     "RestorePath": "/home/cyf/data/res0.tar",
     "RestoreVersion": 0,
     "ChunkingMethod": "cdc",
     "RestoreId": 0,
-    "Size": 4,
+    "Size": 4096,
     "Normal": 2,
     "MerkleTree": "no",
-    "RestoreMethod": "faa",
+    "RestoreMethod": "faa_fixed",
 
     "fingerprintsFilePath": "/home/cyf/cDedup/fingerprints.meta",
     "fileRecipesPath": "/home/cyf/cDedup/FileRecipes",
