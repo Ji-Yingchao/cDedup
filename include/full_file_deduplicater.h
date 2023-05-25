@@ -13,7 +13,7 @@ class FullFileDeduplicater{
         int files_num;
         int file_id;
         bool file_exist;
-        void compute_file_hash(char* input_file_path, unsigned char* hash);
+        void compute_file_hash(const char* input_file_path, unsigned char* hash);
         void scan_and_insert_hash(const unsigned char* hash);
         void init_files_num();
         void insert_hash(const unsigned char* hash);
@@ -29,7 +29,7 @@ class FullFileDeduplicater{
             this->file_id = -1;
         }
         void restoreFile(int file_id, char* restore_path);
-        void writeFile(char* input_file_path);
+        void writeFile(const char* input_file_path);
         bool get_file_exist();
         int get_file_id();
 };

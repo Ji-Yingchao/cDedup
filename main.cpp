@@ -11,6 +11,7 @@
 #include <openssl/sha.h>
 #include <sys/stat.h>
 #include <dirent.h>
+
 #include "fastcdc.h"
 #include "full_file_deduplicater.h"
 #include "merkle_tree.h"
@@ -19,111 +20,11 @@
 #include "ChunkCache.h"
 #include "general.h"
 #include "FAA.h"
+#include "config.h"
+#include "utils/cJSON.h"
 
-char* fingerprintsFilePath = "/home/cyf/cDedup/fingerprints.meta";
-char* fileRecipesPath = "/home/cyf/cDedup/FileRecipes";
-char* containersPath = "/home/cyf/cDedup/Containers";
-char* fullFileFingerprintsPath = "/home/cyf/cDedup/FFFP.meta";
-char* fullFileStoragePath = "/home/cyf/cDedup/FULL_FILE_STORAGE";
-
-const char* merkleMeta[] = {fingerprintsFilePath,
-                        "/home/cyf/cDedup/L1.meta", // 里面只有指纹20字节
-                        "/home/cyf/cDedup/L2.meta",
-                        "/home/cyf/cDedup/L3.meta",
-                        "/home/cyf/cDedup/L4.meta",
-                        "/home/cyf/cDedup/L5.meta",
-                        "/home/cyf/cDedup/L6.meta"};
 
 int (*chunking) (unsigned char*p, int n);
-
-// Argument
-enum TASK_TYPE{
-    TASK_RESTORE,
-    TASK_WRITE,
-    NOT_CHOOSED
-};
-
-enum CHUNKING_METHOD{
-    CDC,
-    FSC,
-    FULL_FILE
-};
-
-enum RESTORE_METHOD{
-    NAIVE_RESTORE,  //无缓冲模式   
-    CONTAINER_CACHE,//基于容器的缓冲
-    CHUNK_CACHE,    //基于数据块的缓冲
-    FAA_FIXED,
-    FAA_ROLLING,
-};
-
-struct option long_options[] = {
-    { "Task", required_argument, NULL, 't' },
-    { "InputFile", required_argument, NULL, 'i' },
-    { "RestorePath", required_argument, NULL, 'r' },
-    { "RestoreVersion", required_argument, NULL, 'v' },
-    { "ChunkingMethod", required_argument, NULL, 'c' },
-    { "RestoreId", required_argument, NULL, 'l' },
-    { "Size", required_argument, NULL, 's' }, //used for fsc size or fastcdc avg size
-    { "Normal", required_argument, NULL, 'n' }, //used for fastcdc normalized level
-    { "MerkleTree", required_argument, NULL, 'm' }, 
-    { "RestoreMethod", required_argument, NULL, 100 }, 
-    { 0, 0, 0, 0 }
-};
-
-enum TASK_TYPE taskTypeTrans(char* s){
-    if(strcmp(s, "write") == 0){
-        return TASK_WRITE;
-    }else if (strcmp(s, "restore") == 0){
-        return TASK_RESTORE;
-    }else{
-        printf("Not support task type:%s\n", s);
-        exit(-1);
-    }
-}
-
-enum CHUNKING_METHOD cmTypeTrans(char* s){
-    if(strcmp(s, "cdc") == 0){
-        return CDC;
-    }else if (strcmp(s, "fsc") == 0){
-        return FSC;
-    }else if (strcmp(s, "file") == 0){
-        return FULL_FILE;
-    }else{
-        printf("Not support chunking method type:%s\n", s);
-        exit(-1);
-    }
-}
-
-bool yesNoTrans(char* s){
-    if(strcmp(s, "yes") == 0){
-        return true;
-    }else if (strcmp(s, "no") == 0){
-        return false;
-    }else{
-        printf("Not support yes no type:%s\n", s);
-        exit(-1);
-    }
-}
-
-RESTORE_METHOD restoreMethodTrans(char* s){
-    if(strcmp(s, "naive") == 0){
-        return NAIVE_RESTORE;
-    }else if (strcmp(s, "container") == 0){
-        return CONTAINER_CACHE;
-    }else if (strcmp(s, "chunk") == 0){
-        return CHUNK_CACHE;
-    }else if (strcmp(s, "faa_fixed") == 0){
-        return FAA_FIXED;
-    }else if (strcmp(s, "faa_rolling") == 0){
-        return FAA_ROLLING;
-    }else{
-        printf("Not support restore method:%s\n", s);
-        exit(-1);
-    }
-}
-// Argument END ---
-
 
 bool streamCmp(const unsigned char* s1, const unsigned char* s2, int len){
     for(int i=0; i<=len-1; i++)
@@ -343,69 +244,22 @@ void flushAssemblingBuffer(int fd, unsigned char* buf, int len){
 }
 
 int main(int argc, char** argv){
+    // 参数解析
+    Config::getInstance().parse_argument(argc, argv);
+    
     // 一次任务的总时间
     // MFDedup并没有计算load FP-index的时间
     struct timeval t0, t1;
     gettimeofday(&t0, NULL);
     
+    // 超级权限
     setuid(0);
-    enum TASK_TYPE task_type = NOT_CHOOSED;
-    enum CHUNKING_METHOD chunking_method = CDC;
-    char* input_file_path = nullptr;
-    char* restore_file_path = nullptr;
-    uint8_t restore_version = -1;
-    int restore_full_file_id = -1;
-    int arg_SIZE = 4; // unit K
-    int NC_level = 0;
-    bool merkle_tree = false;
-    enum RESTORE_METHOD restore_method = NAIVE_RESTORE;
 
-    int c;
-    int option_index = 0;
-
-    while ((c = getopt_long(argc, argv, "t:i:r:v:c:l", long_options, &option_index)) != -1) {
-        switch (c) {
-            case 't':
-                task_type = taskTypeTrans(optarg);
-                break;
-            case 'i':
-                input_file_path = optarg;
-                break;
-            case 'r':
-                restore_file_path = optarg;
-                break;
-            case 'v':
-                restore_version = atoi(optarg);
-                break;
-            case 'c':
-                chunking_method = cmTypeTrans(optarg);
-                break;
-            case 'l':
-                restore_full_file_id = atoi(optarg);
-                break;
-            case 's':
-                arg_SIZE = atoi(optarg);
-                break;
-            case 'n':
-                NC_level = atoi(optarg);
-                break;
-            case 'm':
-                merkle_tree = yesNoTrans(optarg);
-                break;
-            case 100:
-                restore_method = restoreMethodTrans(optarg);
-                break;
-            default:
-                printf("Not support option: %c\n", c);
-                exit(-1);
-                break;
-        }
-    }
-
-    if(chunking_method == FULL_FILE){
-        FullFileDeduplicater ffd(fullFileStoragePath, fullFileFingerprintsPath);
-        if(task_type == TASK_WRITE){
-            ffd.writeFile(input_file_path);
+    if(Config::getInstance().getChunkingMethod() == FULL_FILE){
+        FullFileDeduplicater ffd(Config::getInstance().getFullFileStoragePath(), 
+                                 Config::getInstance().getFullFileFingerprintsPath());
+        if(Config::getInstance().getTaskType() == TASK_WRITE){
+            ffd.writeFile(Config::getInstance().getInputPath().c_str());
 
             if(ffd.get_file_exist())
                 printf("Your input file is existed.\n");
@@ -690,7 +544,7 @@ int main(int argc, char** argv){
             int faa_start = 0;
 
             while(recipe_offset <= file_recipe.size()-1){
-                // 1.从文件recipe取一截到recipe buffer
+                // 1.从文件recipe取一段截到recipe buffer
                 write_length_from_recipe_buffer = 0;
                 faa_start = 0;
                 recipe_buffer.clear();

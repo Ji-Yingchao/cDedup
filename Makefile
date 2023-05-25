@@ -1,7 +1,8 @@
 CC = gcc
-LIB = -lcrypto -lz -lstdc++
+LIB = -lcrypto -lz -lstdc++ -lcjson
 SRC = main.cpp ./src/fastcdc.cpp ./src/full_file_deduplicater.cpp ./src/merkle_tree.cpp \
-	  ./src/MetadataManager.cpp ./src/ContainerCache.cpp ./src/ChunkCache.cpp
+	  ./src/MetadataManager.cpp ./src/ContainerCache.cpp ./src/ChunkCache.cpp \
+	  ./utils/cJSON.c
 EXE_NAME = cDedup
 
 amazing:

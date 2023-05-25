@@ -1,4 +1,5 @@
 #!/bin/bash
+# 这里的配置需要和参数json一致
 
 # CDC
 rm -fr FileRecipes

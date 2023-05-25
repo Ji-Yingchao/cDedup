@@ -11,7 +11,7 @@
     计算全文件哈希
     暂时不能计算超过FILE_CACHE大小的文件
 */
-void FullFileDeduplicater::compute_file_hash(char* input_file_path, unsigned char* hash){
+void FullFileDeduplicater::compute_file_hash(const char* input_file_path, unsigned char* hash){
     unsigned char * full_file_cache = (unsigned char *)malloc(FILE_CACHE);
     int fd = open(input_file_path, O_RDONLY, 777);
     int n_read = read(fd, full_file_cache, FILE_CACHE);
@@ -72,7 +72,7 @@ void FullFileDeduplicater::restoreFile(int file_id, char* restore_path){
 /*
     返回文件ID，后续恢复时需要使用。
 */
-void FullFileDeduplicater::writeFile(char* input_file_path){
+void FullFileDeduplicater::writeFile(const char* input_file_path){
     unsigned char hash[HASH_LENGTH] = {0};
     this->compute_file_hash(input_file_path, hash);
     this->scan_and_insert_hash(hash);

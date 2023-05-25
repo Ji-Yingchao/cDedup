@@ -1,0 +1,26 @@
+{
+    "Task": "read",
+    "InputFile": "/home/cyf/data/linux-5.16.tar",
+    "RestorePath": "/home/cyf/data/res0.tar",
+    "RestoreVersion": 0,
+    "ChunkingMethod": "cdc",
+    "RestoreId": 0,
+    "Size": 4,
+    "Normal": 2,
+    "MerkleTree": "no",
+    "RestoreMethod": "faa",
+
+    "fingerprintsFilePath": "/home/cyf/cDedup/fingerprints.meta",
+    "fileRecipesPath": "/home/cyf/cDedup/FileRecipes",
+    "containersPath": "/home/cyf/cDedup/Containers",
+    "fullFileFingerprintsPath": "/home/cyf/cDedup/FFFP.meta",
+    "fullFileStoragePath": "/home/cyf/cDedup/FULL_FILE_STORAGE",
+ 
+    "MTL1": "/home/cyf/cDedup/L1.meta", 
+    "MTL2": "/home/cyf/cDedup/L2.meta",
+    "MTL3": "/home/cyf/cDedup/L3.meta",
+    "MTL4": "/home/cyf/cDedup/L4.meta",
+    "MTL5": "/home/cyf/cDedup/L5.meta",
+    "MTL6": "/home/cyf/cDedup/L6.meta"
+}
+  
