@@ -7,7 +7,7 @@
 
 class ChunkCache : public Cache{
     public:
-        ChunkCache(char* containersPath, int cache_max_size){
+        ChunkCache(const char* containersPath, int cache_max_size){
             LRUtimestamp = 0;
             this->containers_path = containersPath;
             this->cache_max_size = cache_max_size; // 单位：块数量

@@ -28,7 +28,7 @@ class FullFileDeduplicater{
             this->file_exist = false;
             this->file_id = -1;
         }
-        void restoreFile(int file_id, char* restore_path);
+        void restoreFile(int file_id, const char* restore_path);
         void writeFile(const char* input_file_path);
         bool get_file_exist();
         int get_file_id();

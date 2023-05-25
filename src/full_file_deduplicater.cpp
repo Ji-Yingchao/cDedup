@@ -62,7 +62,7 @@ void FullFileDeduplicater::init_files_num(){
     close(fd);
 }
 
-void FullFileDeduplicater::restoreFile(int file_id, char* restore_path){
+void FullFileDeduplicater::restoreFile(int file_id, const char* restore_path){
     std::string abs_saved_file_name = generate_abs_file_name_from_file_id(this->storage_path, file_id); 
     int fd_new = open(restore_path, O_CREAT | O_RDWR, 777);
     int fd_saved = open(abs_saved_file_name.c_str(), O_RDONLY, 777);

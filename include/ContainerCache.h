@@ -7,7 +7,7 @@
 
 class ContainerCache : public Cache{
     public:
-        ContainerCache(char* containersPath, int cache_max_size){
+        ContainerCache(const char* containersPath, int cache_max_size){
             this->containers_path = containersPath;
             this->cache_max_size = cache_max_size; // 单位：容器数量
             this->container_buf = (char*)malloc(CONTAINER_SIZE);

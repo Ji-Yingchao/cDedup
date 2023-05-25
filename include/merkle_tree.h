@@ -34,7 +34,7 @@ class MerkleTree{
         int max_level;
         int cur_level;
         int group_size;
-        const char** meta_path;
+        char** meta_path;
         std::vector<std::vector<LP_node*>> tree;
         std::vector<L0_node>& base;
         void showTreeSize();
@@ -46,7 +46,7 @@ class MerkleTree{
         void insertLP(const char*, int);
 
     public:
-        MerkleTree(const char** meta_, int gs, int ml, std::vector<L0_node>& base_):
+        MerkleTree(char** meta_, int gs, int ml, std::vector<L0_node>& base_):
         meta_path(meta_),
         base(base_)
         {

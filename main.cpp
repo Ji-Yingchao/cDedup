@@ -26,113 +26,7 @@
 
 int (*chunking) (unsigned char*p, int n);
 
-bool streamCmp(const unsigned char* s1, const unsigned char* s2, int len){
-    for(int i=0; i<=len-1; i++)
-        if(s1[i] != s2[i])
-            return false;
-    return true;
-}
-
-// class chunk START ---
-class Chunk{
-    private:
-        uint8_t fingerprint[SHA_DIGEST_LENGTH];
-        uint32_t ContainerNumber;
-        uint32_t ContainerInnerOffset;
-        uint16_t size;
-        uint16_t ContainerInnerIndex;
-    public:
-        Chunk(){}
-        uint16_t getSize(){return size;}
-        uint32_t getConNum(){return ContainerNumber;}
-        uint32_t getInnerOffset(){return ContainerInnerOffset;}
-        uint8_t* getFingerprint(){return fingerprint;}
-        void initWithCompact(unsigned char*);
-        void initWithValue(unsigned char*,uint32_t,uint32_t,uint16_t,uint16_t);
-        std::string getDataFromDisk();
-        void saveMetaToDisk();
-        static unsigned char restore_container_buf[CONTAINER_SIZE];
-        static Chunk* lookupChunkMeta(const unsigned char*);
-};
-
-unsigned char Chunk::restore_container_buf[CONTAINER_SIZE] = {0};
-
-Chunk* Chunk::lookupChunkMeta(const unsigned char* new_hash){
-    int fd = open(fingerprintsFilePath, O_RDONLY);
-    if (fd < 0) {
-        std::cout << "lookupChunkMeta open error!\n";
-        exit(-1);
-    }
-
-    unsigned char meta_buf[META_DATA_SIZE];
-    Chunk* ans = new Chunk();
-    for(int i=0; ;i++){
-        int n_read = read(fd, meta_buf, META_DATA_SIZE);
-        if(n_read == 0) 
-            return nullptr;
-        if(n_read < 0){
-            std::cout<< "lookupChunkMeta read error!"<<std::endl;
-            exit(-1);
-        } 
-        if(streamCmp(meta_buf, new_hash, SHA_DIGEST_LENGTH)){
-            ans->initWithCompact(meta_buf);
-            return ans;
-        }
-    } 
-    close(fd);
-    return nullptr;
-}
-
-void Chunk::initWithCompact(unsigned char* meta){
-    memcpy(this->fingerprint, meta, SHA_DIGEST_LENGTH);
-    memcpy(&this->ContainerNumber, meta+20, 4);
-    memcpy(&this->ContainerInnerOffset, meta+24, 4);
-    memcpy(&this->size, meta+28, 2);
-    memcpy(&this->ContainerInnerIndex, meta+30, 2);
-}
-
-void Chunk::initWithValue(unsigned char* hash, uint32_t cn, uint32_t off, uint16_t size, uint16_t innerIndex){
-    memcpy(this->fingerprint, hash, SHA_DIGEST_LENGTH);
-    this->ContainerNumber = cn;
-    this->ContainerInnerOffset = off;
-    this->size = size;
-    this->ContainerInnerIndex = innerIndex;
-}
-
-void Chunk::saveMetaToDisk(){
-    int fd = open(fingerprintsFilePath, O_WRONLY | O_APPEND);
-    if(fd < 0){
-        printf("saveMetaToDisk open error, id %d, %s\n", errno, strerror(errno));
-        exit(-1);
-    }
-
-    unsigned char meta_buf[META_DATA_SIZE]={0};
-    memcpy(meta_buf, this->fingerprint,  SHA_DIGEST_LENGTH);
-    memcpy(meta_buf+SHA_DIGEST_LENGTH, &this->ContainerNumber,  4);
-    memcpy(meta_buf+SHA_DIGEST_LENGTH+4, &this->ContainerInnerOffset,  4);
-    memcpy(meta_buf+SHA_DIGEST_LENGTH+4+4, &this->size,  2);
-    memcpy(meta_buf+SHA_DIGEST_LENGTH+4+4+2, &this->ContainerInnerIndex,  2);
-
-    if(write(fd, meta_buf, META_DATA_SIZE) != META_DATA_SIZE){
-        printf("saveMetaToDisk write error, id %d, %s\n", errno, strerror(errno));
-        exit(-1);
-    }
-}
-
-std::string Chunk::getDataFromDisk(){
-    std::string container_name(containersPath);
-    container_name.append("/container");
-    container_name.append(std::to_string(this->ContainerNumber));
-    int fd = open(container_name.data(), O_RDONLY);
-    memset(Chunk::restore_container_buf, 0, CONTAINER_SIZE);
-    read(fd, Chunk::restore_container_buf, CONTAINER_SIZE); // 可能塞不满
-    close(fd);
-    return std::string((char*)Chunk::restore_container_buf + this->ContainerInnerOffset, this->size);
-}
-// ---class chunk END
-
-
-uint32_t getFilesNum(char* dirPath){
+uint32_t getFilesNum(const char* dirPath){
     int ans = 0;
     DIR *dir = opendir(dirPath);
     if(!dir){
@@ -147,7 +41,7 @@ uint32_t getFilesNum(char* dirPath){
     return ans-2;
 }
 
-void saveFileRecipe(std::vector<std::string> file_recipe, char* fileRecipesPath){
+void saveFileRecipe(std::vector<std::string> file_recipe, const char* fileRecipesPath){
     int n_version = getFilesNum(fileRecipesPath);
     std::string recipe_name(fileRecipesPath);
     recipe_name.append("/recipe");
@@ -163,27 +57,27 @@ void saveFileRecipe(std::vector<std::string> file_recipe, char* fileRecipesPath)
     }
 }
 
-std::string getRecipeNameFromVersion(uint8_t restore_version){
-    std::string recipe_name(fileRecipesPath);
+std::string getRecipeNameFromVersion(uint8_t restore_version, const char* file_recipe_path){
+    std::string recipe_name(file_recipe_path);
     recipe_name.append("/recipe");
     recipe_name.append(std::to_string(restore_version));
     return recipe_name;
 }
 
-bool fileRecipeExist(uint8_t restore_version){
-    if((access(getRecipeNameFromVersion(restore_version).data(), F_OK)) != -1)    
+bool fileRecipeExist(uint8_t restore_version, const char* file_recipe_path){
+    if((access(getRecipeNameFromVersion(restore_version, file_recipe_path).data(), F_OK)) != -1)    
         return true;    
  
     return false;
 }
 
-std::vector<std::string> getFileRecipe(uint8_t restore_version){
-    if(!fileRecipeExist(restore_version)){
+std::vector<std::string> getFileRecipe(uint8_t restore_version, const char* file_recipe_path){
+    if(!fileRecipeExist(restore_version, file_recipe_path)){
         printf("Restore version %d not exist!!!\n", restore_version); 
         exit(-1);
     }
 
-    std::string recipe_name = getRecipeNameFromVersion(restore_version);
+    std::string recipe_name = getRecipeNameFromVersion(restore_version, file_recipe_path);
     int fd = open(recipe_name.data(), O_RDONLY, 777);
     if(fd < 0){
         printf("getFileRecipe open error, %s, %s\n", strerror(errno), recipe_name.data());
@@ -207,7 +101,7 @@ std::vector<std::string> getFileRecipe(uint8_t restore_version){
     return ans;
 }
 
-void saveContainer(int container_index, unsigned char* container_buf, unsigned int len, char* containersPath){
+void saveContainer(int container_index, unsigned char* container_buf, unsigned int len, const char* containersPath){
     std::string container_name(containersPath);
     container_name.append("/container");
     container_name.append(std::to_string(container_index));
@@ -220,10 +114,11 @@ void saveContainer(int container_index, unsigned char* container_buf, unsigned i
 
 void saveChunkToContainer(unsigned int& container_buf_pointer, unsigned char* container_buf, 
                           uint32_t& container_index, uint32_t& container_inner_offset, uint16_t& container_inner_index,
-                          int chunk_length, int file_offset, unsigned char* file_cache, void* SHA_buf){
+                          int chunk_length, int file_offset, unsigned char* file_cache, void* SHA_buf,
+                          const char* containers_path){
     // flush
     if(container_buf_pointer + chunk_length >= CONTAINER_SIZE){
-        saveContainer(container_index, container_buf, container_buf_pointer, containersPath);
+        saveContainer(container_index, container_buf, container_buf_pointer, containers_path);
         memset(container_buf, 0, CONTAINER_SIZE);
         container_index++;
         container_inner_offset = 0;
@@ -268,12 +163,15 @@ int main(int argc, char** argv){
 
             printf("The file id is %d\n", ffd.get_file_id());
         }
-        else if(task_type == TASK_RESTORE){
-            ffd.restoreFile(restore_full_file_id, restore_file_path);
+        else if(Config::getInstance().getTaskType() == TASK_RESTORE){
+            ffd.restoreFile(Config::getInstance().getRestoreId(), 
+                            Config::getInstance().getRestorePath().c_str());
         }
         return 0;
-    }else if(chunking_method == CDC){
-        fastCDC_init(arg_SIZE*1024, NC_level);
+    }else if(Config::getInstance().getChunkingMethod() == CDC){
+        int NC_level = Config::getInstance().getNormalLevel();
+        int avg_size = Config::getInstance().getAvgChunkSize();
+        fastCDC_init(avg_size, NC_level);
 
         if(NC_level == 0)
             chunking = FastCDC_without_NC;
@@ -282,12 +180,13 @@ int main(int argc, char** argv){
         else{
             printf("Invalid NC level: %d\n", NC_level);
         }
-    }else if(chunking_method == FSC){
-        if(arg_SIZE == 4){
+    }else if(Config::getInstance().getChunkingMethod() == FSC){
+        int avg_size = Config::getInstance().getAvgChunkSize();
+        if(avg_size == 4){
             chunking = FSC_4;
-        }else if(arg_SIZE == 8){
+        }else if(avg_size == 8){
             chunking = FSC_8;
-        }else if(arg_SIZE == 16){
+        }else if(avg_size == 16){
             chunking = FSC_16;
         }else{
             printf("Invalid fixed size, the support size is 4 or 8 or 16\n");
@@ -295,14 +194,14 @@ int main(int argc, char** argv){
         }
     }
     
-    GlobalMetadataManagerPtr = new MetadataManager(fingerprintsFilePath);
-    int current_version = getFilesNum(fileRecipesPath);
+    GlobalMetadataManagerPtr = new MetadataManager(Config::getInstance().getFingerprintsFilePath().c_str());
+    int current_version = getFilesNum(Config::getInstance().getFileRecipesPath().c_str());
     if(current_version != 0){
         GlobalMetadataManagerPtr->load();
     }
 
-    if(task_type == TASK_WRITE){
-        int fd = open(input_file_path, O_RDONLY, 777);
+    if(Config::getInstance().getTaskType() == TASK_WRITE){
+        int fd = open(Config::getInstance().getInputPath().c_str(), O_RDONLY, 777);
         if(fd < 0){
             printf("open file error, id %d, %s\n", errno, strerror(errno));
             exit(-1);
@@ -315,7 +214,7 @@ int main(int argc, char** argv){
         std::vector<std::string> file_recipe; // 保存这个文件所有块的指纹
 
         // metadata entry(except FP)
-        uint32_t container_index = getFilesNum(containersPath);
+        uint32_t container_index = getFilesNum(Config::getInstance().getContainersPath().c_str());
         uint32_t container_inner_offset = 0;
         uint16_t chunk_length = 0;
         uint16_t container_inner_index = 0;
@@ -337,7 +236,7 @@ int main(int argc, char** argv){
 
         // 梅克尔树重删 由于树内部块没参与重删，可能会降低重删率。
         // 暂不支持大于FILE CACHE大小文件的重删
-        if(merkle_tree){
+        if(Config::getInstance().getMerkleTree()){
             std::vector<L0_node> L0_nodes;
             n_read = read(fd, file_cache, FILE_CACHE);
             while(file_offset < n_read){  
@@ -350,6 +249,14 @@ int main(int argc, char** argv){
                 file_recipe.push_back(std::string((char*)SHA_buf, SHA_DIGEST_LENGTH));
             }
 
+            char** merkleMeta = (char**)malloc(sizeof(char*)*7);
+            merkleMeta[0] = const_cast<char*>(Config::getInstance().getFingerprintsFilePath().c_str());
+            merkleMeta[1] = const_cast<char*>(Config::getInstance().getMTL1().c_str());
+            merkleMeta[2] = const_cast<char*>(Config::getInstance().getMTL2().c_str());
+            merkleMeta[3] = const_cast<char*>(Config::getInstance().getMTL3().c_str());
+            merkleMeta[4] = const_cast<char*>(Config::getInstance().getMTL4().c_str());
+            merkleMeta[5] = const_cast<char*>(Config::getInstance().getMTL5().c_str());
+            merkleMeta[6] = const_cast<char*>(Config::getInstance().getMTL6().c_str());
             mt = new MerkleTree(merkleMeta, 10, 6, L0_nodes);
             mt->buildTree(L0_nodes);
             mt->markNonDuplicateNodes();
@@ -362,7 +269,8 @@ int main(int argc, char** argv){
                 if(!x.found){
                     saveChunkToContainer(container_buf_pointer, container_buf, 
                         container_index, container_inner_offset, container_inner_index,
-                        x.chunk_length, x.file_offset, file_cache, (void*)x.SHA1_hash.c_str());
+                        x.chunk_length, x.file_offset, file_cache, (void*)x.SHA1_hash.c_str(),
+                        Config::getInstance().getContainersPath().c_str());
                 }else{
                     dedup_chunks ++;
                     dedup_size += x.chunk_length;
@@ -402,7 +310,8 @@ int main(int argc, char** argv){
                     // save chunk itself
                     saveChunkToContainer(container_buf_pointer, container_buf, 
                                         container_index, container_inner_offset, container_inner_index,
-                                        chunk_length, file_offset, file_cache, SHA_buf);
+                                        chunk_length, file_offset, file_cache, SHA_buf,
+                                        Config::getInstance().getContainersPath().c_str());
 
                     // save chunk metadata
                     entry_value.container_number = container_index;
@@ -431,10 +340,11 @@ int main(int argc, char** argv){
     writend:       
         //  flush最后一个container
         if(container_buf_pointer > 0)
-            saveContainer(container_index, container_buf, container_buf_pointer, containersPath);
+            saveContainer(container_index, container_buf, 
+                          container_buf_pointer, Config::getInstance().getContainersPath().c_str());
         
         // flush file_recipe
-        saveFileRecipe(file_recipe, fileRecipesPath);
+        saveFileRecipe(file_recipe, Config::getInstance().getFileRecipesPath().c_str());
 
         // save metadata entry
         GlobalMetadataManagerPtr->save();
@@ -448,11 +358,12 @@ int main(int argc, char** argv){
         printf("Dedup data size %d\n",    dedup_size);
         printf("Dedup Ratio %.2f%\n",     double(dedup_chunks) / sum_chunks *100);
 
-    }else if(task_type == TASK_RESTORE){
+    }else if(Config::getInstance().getTaskType() == TASK_RESTORE){
         int restore_size = 0;
 
-        if(!fileRecipeExist(restore_version)){
-            printf("Version %d not exist!\n", restore_version);
+        if(!fileRecipeExist(Config::getInstance().getRestoreVersion(),
+                            Config::getInstance().getFileRecipesPath().c_str())){
+            printf("Version %d not exist!\n", Config::getInstance().getRestoreVersion());
             return 0;
         }
         
@@ -461,39 +372,23 @@ int main(int argc, char** argv){
         int write_buffer_offset = 0;
 
         //recipe
-        std::vector<std::string> file_recipe = getFileRecipe(restore_version);
+        std::vector<std::string> file_recipe = getFileRecipe(Config::getInstance().getRestoreVersion(),
+                                                             Config::getInstance().getFileRecipesPath().c_str());
 
         //组装
-        if(restore_method == NAIVE_RESTORE){
-            for(auto &x : file_recipe){
-                Chunk *ck = Chunk::lookupChunkMeta((const unsigned char*)x.data());
-                if(ck == nullptr){
-                    printf("Fatal error!!!\n");
-                    exit(-1);
-                }
-
-                std::string ck_data = ck->getDataFromDisk();
-                if(ck_data.size() != ck->getSize()){
-                    printf("Fatal error size different!!!\n");
-                    exit(-1);
-                }
-                memcpy(assembling_buffer + write_buffer_offset, 
-                    ck_data.data(), ck_data.size());
-                write_buffer_offset += ck_data.size();
-                delete ck;
-            }   
-        }else if(restore_method == CONTAINER_CACHE || restore_method == CHUNK_CACHE){
-            int fd = open(restore_file_path, O_RDWR | O_CREAT, 777);
+        if(Config::getInstance().getRestoreMethod() == CONTAINER_CACHE ||
+           Config::getInstance().getRestoreMethod() == CHUNK_CACHE){
+            int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT, 777);
             if(fd < 0){
                 printf("无法写文件!!! %s\n", strerror(errno));
                 exit(-1);
             }
 
             Cache* cc;
-            if(restore_method == CONTAINER_CACHE){
-                cc = new ContainerCache(containersPath, 128);
-            }else if(restore_method == CHUNK_CACHE){
-                cc = new ChunkCache(containersPath, 128);
+            if(Config::getInstance().getRestoreMethod() == CONTAINER_CACHE){
+                cc = new ContainerCache(Config::getInstance().getContainersPath().c_str(), 128);
+            }else if(Config::getInstance().getRestoreMethod() == CHUNK_CACHE){
+                cc = new ChunkCache(Config::getInstance().getContainersPath().c_str(), 128);
             }
             
             for(auto &x : file_recipe){
@@ -527,8 +422,8 @@ int main(int argc, char** argv){
 
             flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
             close(fd);
-        }else if(restore_method == FAA_FIXED){
-            int fd = open(restore_file_path, O_RDWR | O_CREAT, 777);
+        }else if(Config::getInstance().getRestoreMethod() == FAA_FIXED){
+            int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT, 777);
             if(fd < 0){
                 printf("无法写文件!!! %s\n", strerror(errno));
                 exit(-1);
@@ -569,7 +464,7 @@ int main(int argc, char** argv){
                     for(auto &x : recipe_buffer){
                         if(!x.used){
                             buffered_CID = x.CID;
-                            FAA::loadContainer(buffered_CID, containersPath, container_read_buffer);
+                            FAA::loadContainer(buffered_CID, Config::getInstance().getContainersPath(), container_read_buffer);
                             flag = 1;
                             break;
                         }
@@ -595,7 +490,7 @@ int main(int argc, char** argv){
 
             close(fd);
         }else{
-            printf("暂不支持的恢复算法 %d\n", restore_method);
+            printf("暂不支持的恢复算法 %d\n", Config::getInstance().getRestoreMethod());
             exit(-1);
         }
 
@@ -605,9 +500,9 @@ int main(int argc, char** argv){
 
     gettimeofday(&t1, NULL);
     uint64_t single_dedup_time_us = (t1.tv_sec - t0.tv_sec) * 1000000 + t1.tv_usec - t0.tv_usec;
-    if(task_type == TASK_WRITE)
+    if(Config::getInstance().getTaskType() == TASK_WRITE)
         printf("Backup duration:%lu us\n", single_dedup_time_us);
-    else if(task_type == TASK_RESTORE)
+    else if(Config::getInstance().getTaskType() == TASK_RESTORE)
         printf("Restore duration:%lu us\n", single_dedup_time_us);
     
     return 0;
