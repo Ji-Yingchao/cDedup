@@ -1,6 +1,7 @@
 #ifndef __CONFIG_H__
 #define __CONFIG_H__
 #include<iostream>
+#include <string.h>
 #include"cJSON.h"
 using namespace std;
 
