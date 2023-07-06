@@ -1,0 +1,26 @@
+{
+    "Task": "restore",
+    "InputFile": "TEST/aa.pdf",
+    "RestorePath": "TEST/res_aa.pdf",
+    "RestoreVersion": 2,
+    "ChunkingMethod": "cdc",
+    "RestoreId": 0,
+    "Size": 4,
+    "Normal": 2,
+    "MerkleTree": "no",
+    "RestoreMethod": "faa_fixed",
+
+    "fingerprintsFilePath": "TEST/metadata/fingerprints.meta",
+    "fileRecipesPath": "TEST/metadata/FileRecipes",
+    "containersPath": "TEST/metadata/Containers",
+    "fullFileFingerprintsPath": "TEST/metadata/FFFP.meta",
+    "fullFileStoragePath": "TEST/metadata/FULL_FILE_STORAGE",
+ 
+    "MTL1": "TEST/metadata/L1.meta", 
+    "MTL2": "TEST/metadata/L2.meta",
+    "MTL3": "TEST/metadata/L3.meta",
+    "MTL4": "TEST/metadata/L4.meta",
+    "MTL5": "TEST/metadata/L5.meta",
+    "MTL6": "TEST/metadata/L6.meta"
+}
+  
