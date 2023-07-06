@@ -1,7 +1,12 @@
 {
     "Task": "write",
+<<<<<<< HEAD
     "InputFile": "TEST/aa.pdf",
     "RestorePath": "TEST/res_aa.pdf",
+=======
+    "InputFile": "/home/cyf/data/linux-5.18.tar",
+    "RestorePath": "/home/cyf/data/res0.tar",
+>>>>>>> d8d91a09ec79c5b533242a59a3aa814990b3270e
     "RestoreVersion": 0,
     "ChunkingMethod": "cdc",
     "RestoreId": 0,
@@ -10,6 +15,7 @@
     "MerkleTree": "no",
     "RestoreMethod": "faa_fixed",
 
+<<<<<<< HEAD
     "fingerprintsFilePath": "TEST/metadata/fingerprints.meta",
     "fileRecipesPath": "TEST/metadata/FileRecipes",
     "containersPath": "TEST/metadata/Containers",
@@ -22,5 +28,19 @@
     "MTL4": "TEST/metadata/L4.meta",
     "MTL5": "TEST/metadata/L5.meta",
     "MTL6": "TEST/metadata/L6.meta"
+=======
+    "fingerprintsFilePath": "/home/cyf/cDedup/fingerprints.meta",
+    "fileRecipesPath": "/home/cyf/cDedup/FileRecipes",
+    "containersPath": "/home/cyf/cDedup/Containers",
+    "fullFileFingerprintsPath": "/home/cyf/cDedup/FFFP.meta",
+    "fullFileStoragePath": "/home/cyf/cDedup/FULL_FILE_STORAGE",
+ 
+    "MTL1": "/home/cyf/cDedup/L1.meta", 
+    "MTL2": "/home/cyf/cDedup/L2.meta",
+    "MTL3": "/home/cyf/cDedup/L3.meta",
+    "MTL4": "/home/cyf/cDedup/L4.meta",
+    "MTL5": "/home/cyf/cDedup/L5.meta",
+    "MTL6": "/home/cyf/cDedup/L6.meta"
+>>>>>>> d8d91a09ec79c5b533242a59a3aa814990b3270e
 }
   
