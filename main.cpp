@@ -504,8 +504,8 @@ int main(int argc, char** argv){
         printf("Backup duration:%lu us\n", single_dedup_time_us);
     else if(Config::getInstance().getTaskType() == TASK_RESTORE)
         printf("Restore duration:%lu us\n", single_dedup_time_us);
-    // else if(Config::getInstance().getTaskType() == TASK_DELETE)
-    //     printf("Delete duration:%lu us\n", single_dedup_time_us);
+    else if(Config::getInstance().getTaskType() == TASK_DELETE)
+        printf("Delete duration:%lu us\n", single_dedup_time_us);
 
     
     return 0;
