@@ -1,10 +1,11 @@
 {
     "Task": "write",
-    "InputFile": "TEST/aa.pdf",
+    "InputFile": "TEST/ab.pdf",
     "RestorePath": "TEST/res_aa.pdf",
     "RestoreVersion": 0,
-    "ChunkingMethod": "cdc",
+    "ChunkingMethod": "file",
     "RestoreId": 0,
+    "DeleteId": 0,
     "Size": 4096,
     "Normal": 2,
     "MerkleTree": "no",

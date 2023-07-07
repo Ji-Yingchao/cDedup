@@ -8,6 +8,7 @@ using namespace std;
 enum TASK_TYPE{
     TASK_RESTORE,
     TASK_WRITE,
+    TASK_DELETE,
     NOT_CHOOSED
 };
 
@@ -39,6 +40,7 @@ class Config{
         int getRestoreVersion(){return this->restore_version;}
         enum CHUNKING_METHOD getChunkingMethod(){return this->cm;}
         int getRestoreId(){return this->restore_id;}
+        int getDeleteId(){return this->delete_id;}
         int getAvgChunkSize(){return this->avg_chunk_size;}
         int getNormalLevel(){return this->normal_level;}
         bool getMerkleTree(){return this->merkle_tree;}
@@ -64,6 +66,7 @@ class Config{
         void setRestoreVersion(int n){this->restore_version = n;}
         void setChunkingMethod(char* s){this->cm = cmTypeTrans(s);}
         void setRestoreId(int n){this->restore_id = n;}
+        void setDeleteId(int n){this->delete_id = n;}
         void setSize(int n){this->avg_chunk_size = n;}
         void setNormal(int n){this->normal_level = n;}
         void setMerkleTree(char* s){this->merkle_tree = yesNoTrans(s);}
@@ -119,6 +122,8 @@ class Config{
                     Config::getInstance().setChunkingMethod(valuestring);
                 } else if (strcmp(name, "RestoreId") == 0) {
                     Config::getInstance().setRestoreId(val_int);
+                } else if (strcmp(name, "DeleteId") == 0) {
+                    Config::getInstance().setDeleteId(val_int);
                 }else if (strcmp(name, "Size") == 0) {
                     Config::getInstance().setSize(val_int);
                 }else if (strcmp(name, "Normal") == 0) {
@@ -165,6 +170,7 @@ class Config{
         string restore_path;
         int restore_version;    // used for cdc
         int restore_id;         // used for full file dedup
+        int delete_id;
         int avg_chunk_size;     // unit KiB
         int normal_level;
         bool merkle_tree;
@@ -188,6 +194,8 @@ class Config{
                 return TASK_WRITE;
             }else if (strcmp(s, "restore") == 0){
                 return TASK_RESTORE;
+            }else if (strcmp(s, "delete") == 0){
+                return TASK_DELETE;
             }else{
                 printf("Not support task type:%s\n", s);
                 exit(-1);

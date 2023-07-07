@@ -7,6 +7,22 @@
 #include <unistd.h>
 #include <sys/sendfile.h>
 
+
+bool uint32not0(unsigned char* s){
+    if(s[0]==0 && s[1]==0 && s[2]==0 && s[3]==0)
+        return 0;
+    return 1;
+}
+uint32_t file_uint32chg(int fd, size_t offset, int delta){
+    lseek(fd, offset, SEEK_SET);
+    uint32_t ut = 0;
+    read(fd, &ut, 4);
+    lseek(fd, offset, SEEK_SET);
+    ut += delta;
+    write(fd, &ut, 4);
+    return ut;
+}
+
 /*
     计算全文件哈希
     暂时不能计算超过FILE_CACHE大小的文件
@@ -14,6 +30,10 @@
 void FullFileDeduplicater::compute_file_hash(const char* input_file_path, unsigned char* hash){
     unsigned char * full_file_cache = (unsigned char *)malloc(FILE_CACHE);
     int fd = open(input_file_path, O_RDONLY, 777);
+    if(fd < 0){
+        printf("compute_file_hash: open file fail.\n");
+        return;
+    }
     int n_read = read(fd, full_file_cache, FILE_CACHE);
     SHA1(full_file_cache, n_read, hash);
     close(fd);
@@ -22,19 +42,22 @@ void FullFileDeduplicater::compute_file_hash(const char* input_file_path, unsign
 /*
     扫描指纹文件，每20字节对比，如果找到匹配，那么该文件是重复的。
 */
-void FullFileDeduplicater::scan_and_insert_hash(const unsigned char* hash){
+uint32_t FullFileDeduplicater::scan_and_insert_hash(const unsigned char* hash){
     int fd = open(this->fingerprint_path.c_str(), O_RDONLY, 777);
     unsigned char file_fingerprints_cache[FILE_FINGERPRINTS_CACHE] = {0};
     read(fd, file_fingerprints_cache, FILE_FINGERPRINTS_CACHE);
     for(int i=0; i<=this->files_num-1; i++){
         for(int j=0; j<=HASH_LENGTH-1; j++){
-            if(hash[j] != file_fingerprints_cache[j + i*HASH_LENGTH])
+            if(hash[j] != file_fingerprints_cache[j + i*ENTRY_LENGTH])
                 break;
-            if(j == HASH_LENGTH-1){
+            if(j == HASH_LENGTH-1 && uint32not0(&file_fingerprints_cache[i*ENTRY_LENGTH + HASH_LENGTH])){
                 this->file_id = i; // 找到编号为i的hash
                 this->file_exist = true;
                 close(fd);
-                return ;
+                fd = open(this->fingerprint_path.c_str(), O_RDWR, 777);
+                uint32_t ft = file_uint32chg(fd, i*ENTRY_LENGTH + HASH_LENGTH, 1);
+                close(fd);
+                return ft;
             }
         }
     }
@@ -42,11 +65,37 @@ void FullFileDeduplicater::scan_and_insert_hash(const unsigned char* hash){
     this->file_exist = false;
     this->insert_hash(hash);
     close(fd);
+    return 1;
+}
+
+uint32_t FullFileDeduplicater::scan_and_delete_hash(const unsigned char* hash){
+    int fd = open(this->fingerprint_path.c_str(), O_RDONLY, 777);
+    unsigned char file_fingerprints_cache[FILE_FINGERPRINTS_CACHE] = {0};
+    read(fd, file_fingerprints_cache, FILE_FINGERPRINTS_CACHE);
+    for(int i=0; i<=this->files_num-1; i++){
+        for(int j=0; j<=HASH_LENGTH-1; j++){
+            if(hash[j] != file_fingerprints_cache[j + i*ENTRY_LENGTH])
+                break;
+            if(j == HASH_LENGTH-1 && uint32not0(&file_fingerprints_cache[i*ENTRY_LENGTH + HASH_LENGTH])){
+                // this->file_id = i; // 找到编号为i的hash
+                // this->file_exist = true;
+                close(fd);
+                fd = open(this->fingerprint_path.c_str(), O_RDWR, 777);
+                uint32_t ft = file_uint32chg(fd, i*ENTRY_LENGTH + HASH_LENGTH, -1);
+                close(fd);
+                return ft;
+            }
+        }
+    }
+    printf("scan_and_delete_hash: file does not exist!\n");
+    return 0;
 }
 
 void FullFileDeduplicater::insert_hash(const unsigned char* hash){
     int fd = open(this->fingerprint_path.c_str(), O_RDWR | O_APPEND, 777);
     write(fd, hash, HASH_LENGTH);
+    const uint32_t uc = 1;
+    write(fd, &uc, COUNT_LENGTH);
     close(fd);
 }
 
@@ -58,7 +107,7 @@ void FullFileDeduplicater::init_files_num(){
     int fd = open(this->fingerprint_path.c_str(), O_RDONLY, 777);
     struct stat _stat;
     fstat(fd, &_stat);
-    this->files_num = _stat.st_size / (SHA_DIGEST_LENGTH); 
+    this->files_num = _stat.st_size / (ENTRY_LENGTH); 
     close(fd);
 }
 
@@ -75,7 +124,8 @@ void FullFileDeduplicater::restoreFile(int file_id, const char* restore_path){
 void FullFileDeduplicater::writeFile(const char* input_file_path){
     unsigned char hash[HASH_LENGTH] = {0};
     this->compute_file_hash(input_file_path, hash);
-    this->scan_and_insert_hash(hash);
+    uint32_t ft = this->scan_and_insert_hash(hash);
+    printf("write %s, cnt = %d\n", input_file_path, ft);
     if(!this->file_exist)
         this->save_file(input_file_path);
 }
@@ -106,4 +156,15 @@ std::string FullFileDeduplicater::generate_abs_file_name_from_file_id(std::strin
         abs_file_name.append(std::to_string(_file_id));
     }
     return abs_file_name;
+}
+
+
+void FullFileDeduplicater::deleteFile(int file_id){
+    std::string abs_file_name = generate_abs_file_name_from_file_id(this->storage_path, file_id);
+    unsigned char hash[HASH_LENGTH] = {0};
+    this->compute_file_hash(abs_file_name.c_str(), hash);
+    uint32_t ft = this->scan_and_delete_hash(hash);
+    if(ft == 0){
+        remove(abs_file_name.c_str());
+    }
 }

@@ -167,6 +167,9 @@ int main(int argc, char** argv){
             ffd.restoreFile(Config::getInstance().getRestoreId(), 
                             Config::getInstance().getRestorePath().c_str());
         }
+        else if(Config::getInstance().getTaskType() == TASK_DELETE){
+            ffd.deleteFile(Config::getInstance().getDeleteId());
+        }
         return 0;
     }else if(Config::getInstance().getChunkingMethod() == CDC){
         int NC_level = Config::getInstance().getNormalLevel();
@@ -496,6 +499,9 @@ int main(int argc, char** argv){
 
         printf("-----------------------Restore statics----------------------\n");
         printf("Restore size %d\n", restore_size);
+
+    }else if(Config::getInstance().getTaskType() == TASK_DELETE){
+        ;
     }
 
     gettimeofday(&t1, NULL);
