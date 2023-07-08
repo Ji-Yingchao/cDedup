@@ -26,6 +26,7 @@ struct ENTRY_VALUE {
     uint32_t offset;
     uint16_t chunk_length;
     uint16_t container_inner_index;
+    uint32_t ref_cnt;
 };
 
 struct TupleHasher {
@@ -50,6 +51,8 @@ class MetadataManager {
         int load();
         LookupResult dedupLookup(const SHA1FP &sha1);
         int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value);
+        int addRefCnt(const SHA1FP sha1);
+        int decRefCnt(const SHA1FP sha1);
         ENTRY_VALUE getEntry(const SHA1FP sha1);
 
     private:

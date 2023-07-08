@@ -321,6 +321,7 @@ int main(int argc, char** argv){
                     entry_value.offset = container_inner_offset;
                     entry_value.chunk_length = chunk_length;
                     entry_value.container_inner_index = container_inner_index;
+                    entry_value.ref_cnt = 1;
                     GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value);
 
                     // 
@@ -328,7 +329,8 @@ int main(int argc, char** argv){
                     container_buf_pointer += chunk_length;
                     container_inner_index ++;
 
-                }else if(lookup_result == Dedup){  
+                }else if(lookup_result == Dedup){
+                    GlobalMetadataManagerPtr->addRefCnt(sha1_fp);
                     // 重删统计
                     dedup_chunks ++;
                     dedup_size += chunk_length;
@@ -501,7 +503,39 @@ int main(int argc, char** argv){
         printf("Restore size %d\n", restore_size);
 
     }else if(Config::getInstance().getTaskType() == TASK_DELETE){
-        ;
+        // 根据 json 文件中的 fileRecipesPath 和 RestoreVersion 选择要删除的文件
+
+        if(!fileRecipeExist(Config::getInstance().getRestoreVersion(),
+                            Config::getInstance().getFileRecipesPath().c_str())){
+            printf("Version %d not exist!\n", Config::getInstance().getRestoreVersion());
+            return 0;
+        }
+        std::vector<std::string> file_recipe = getFileRecipe(Config::getInstance().getRestoreVersion(),
+                                                             Config::getInstance().getFileRecipesPath().c_str());
+        
+
+        for(auto &x : file_recipe){
+                SHA1FP fp;
+                memcpy(&fp, x.data(), sizeof(SHA1FP));
+                LookupResult res = GlobalMetadataManagerPtr->dedupLookup(fp);
+
+                if(res == Unique){
+                    printf("Fatal error!!!\n");
+                    exit(-1);
+                }
+
+                ENTRY_VALUE ev = GlobalMetadataManagerPtr->getEntry(fp);
+
+                int dv = GlobalMetadataManagerPtr->decRefCnt(fp);
+
+                if(dv == 0){
+                    // ++ delete chunk
+                }
+        }
+
+        std::string abs_file = getRecipeNameFromVersion(Config::getInstance().getRestoreVersion(),
+                                        Config::getInstance().getFileRecipesPath().c_str());
+        remove(abs_file.c_str());
     }
 
     gettimeofday(&t1, NULL);

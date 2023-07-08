@@ -65,6 +65,29 @@ int MetadataManager::addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value){
     return 0;
 }
 
+int MetadataManager::addRefCnt(const SHA1FP sha1){
+    auto dedupIter = this->fp_table_added.find(sha1);
+    if(dedupIter != this->fp_table_added.end())
+        return ++dedupIter->second.ref_cnt;
+    dedupIter = this->fp_table_origin.find(sha1);
+    if(dedupIter != this->fp_table_added.end())
+        return ++dedupIter->second.ref_cnt;
+    printf("addRefCnt: did not find\n");
+}
+
+int MetadataManager::decRefCnt(const SHA1FP sha1){
+    auto dedupIter = this->fp_table_origin.find(sha1);
+    if(dedupIter != this->fp_table_origin.end()){
+        if(dedupIter->second.ref_cnt > 1)
+            return --dedupIter->second.ref_cnt;
+        else{
+            fp_table_origin.erase(dedupIter);
+            return 0;
+        }
+    }
+    printf("decRefCnt: did not find\n");
+}
+
 ENTRY_VALUE MetadataManager::getEntry(const SHA1FP sha1){
     return this->fp_table_origin[sha1];
 }
