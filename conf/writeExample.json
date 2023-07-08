@@ -1,26 +1,27 @@
 {
     "Task": "write",
-    "InputFile": "/home/cyf/data/linux-5.18.tar",
-    "RestorePath": "/home/cyf/data/res0.tar",
+    "InputFile": "TEST/ab.pdf",
+    "RestorePath": "TEST/res_aa.pdf",
     "RestoreVersion": 0,
-    "ChunkingMethod": "cdc",
+    "ChunkingMethod": "file",
     "RestoreId": 0,
+    "DeleteId": 0,
     "Size": 4096,
     "Normal": 2,
     "MerkleTree": "no",
     "RestoreMethod": "faa_fixed",
 
-    "fingerprintsFilePath": "/home/cyf/cDedup/fingerprints.meta",
-    "fileRecipesPath": "/home/cyf/cDedup/FileRecipes",
-    "containersPath": "/home/cyf/cDedup/Containers",
-    "fullFileFingerprintsPath": "/home/cyf/cDedup/FFFP.meta",
-    "fullFileStoragePath": "/home/cyf/cDedup/FULL_FILE_STORAGE",
+    "fingerprintsFilePath": "TEST/metadata/fingerprints.meta",
+    "fileRecipesPath": "TEST/metadata/FileRecipes",
+    "containersPath": "TEST/metadata/Containers",
+    "fullFileFingerprintsPath": "TEST/metadata/FFFP.meta",
+    "fullFileStoragePath": "TEST/metadata/FULL_FILE_STORAGE",
  
-    "MTL1": "/home/cyf/cDedup/L1.meta", 
-    "MTL2": "/home/cyf/cDedup/L2.meta",
-    "MTL3": "/home/cyf/cDedup/L3.meta",
-    "MTL4": "/home/cyf/cDedup/L4.meta",
-    "MTL5": "/home/cyf/cDedup/L5.meta",
-    "MTL6": "/home/cyf/cDedup/L6.meta"
+    "MTL1": "TEST/metadata/L1.meta", 
+    "MTL2": "TEST/metadata/L2.meta",
+    "MTL3": "TEST/metadata/L3.meta",
+    "MTL4": "TEST/metadata/L4.meta",
+    "MTL5": "TEST/metadata/L5.meta",
+    "MTL6": "TEST/metadata/L6.meta"
 }
   

@@ -2,30 +2,33 @@
 # 这里的配置需要和参数json一致
 
 # CDC
-rm -fr FileRecipes
-rm -fr Containers
-rm fingerprints.meta
+rm -fr TEST/metadata/FileRecipes
+rm -fr TEST/metadata/Containers
+rm -f TEST/metadata/fingerprints.meta
 
 # FULL FILE
-rm -fr FULL_FILE_STORAGE
-rm FFFP.meta
+rm -fr TEST/metadata/FULL_FILE_STORAGE
+rm -f TEST/metadata/FFFP.meta
 
 # MERKLE TREE
-rm /home/cyf/cDedup/L1.meta
-rm /home/cyf/cDedup/L2.meta
-rm /home/cyf/cDedup/L3.meta
-rm /home/cyf/cDedup/L4.meta
-rm /home/cyf/cDedup/L5.meta
-rm /home/cyf/cDedup/L6.meta
+rm -f TEST/metadata/L1.meta
+rm -f TEST/metadata/L2.meta
+rm -f TEST/metadata/L3.meta
+rm -f TEST/metadata/L4.meta
+rm -f TEST/metadata/L5.meta
+rm -f TEST/metadata/L6.meta
 
-mkdir FileRecipes
-mkdir Containers
-touch fingerprints.meta
-mkdir FULL_FILE_STORAGE
-touch FFFP.meta
-touch /home/cyf/cDedup/L1.meta
-touch /home/cyf/cDedup/L2.meta
-touch /home/cyf/cDedup/L3.meta
-touch /home/cyf/cDedup/L4.meta
-touch /home/cyf/cDedup/L5.meta
-touch /home/cyf/cDedup/L6.meta
+
+
+mkdir TEST/metadata/FileRecipes
+mkdir TEST/metadata/Containers
+touch TEST/metadata/fingerprints.meta
+mkdir TEST/metadata/FULL_FILE_STORAGE
+touch TEST/metadata/FFFP.meta
+touch TEST/metadata/L1.meta
+touch TEST/metadata/L2.meta
+touch TEST/metadata/L3.meta
+touch TEST/metadata/L4.meta
+touch TEST/metadata/L5.meta
+touch TEST/metadata/L6.meta
+

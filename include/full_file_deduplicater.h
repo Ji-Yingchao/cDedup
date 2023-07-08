@@ -3,8 +3,10 @@
 #include "general.h"
 
 #define FULL_FILE_CACHE (1024*1024*1024)
-#define FILE_FINGERPRINTS_CACHE (20*100)
+#define FILE_FINGERPRINTS_CACHE (24*100)
 #define HASH_LENGTH 20
+#define COUNT_LENGTH 4
+#define ENTRY_LENGTH (HASH_LENGTH + COUNT_LENGTH)
 
 class FullFileDeduplicater{
     private:
@@ -14,7 +16,8 @@ class FullFileDeduplicater{
         int file_id;
         bool file_exist;
         void compute_file_hash(const char* input_file_path, unsigned char* hash);
-        void scan_and_insert_hash(const unsigned char* hash);
+        uint32_t scan_and_insert_hash(const unsigned char* hash);
+        uint32_t scan_and_delete_hash(const unsigned char* hash);
         void init_files_num();
         void insert_hash(const unsigned char* hash);
         void save_file(const char* input_file_path);
@@ -28,6 +31,7 @@ class FullFileDeduplicater{
             this->file_exist = false;
             this->file_id = -1;
         }
+        void deleteFile(int file_id);
         void restoreFile(int file_id, const char* restore_path);
         void writeFile(const char* input_file_path);
         bool get_file_exist();
