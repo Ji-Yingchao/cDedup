@@ -133,7 +133,7 @@ void MerkleTree::walk(LP_node* root){
 // 和main里面的元数据长度一样
 # define L0_META_DATA_SIZE 30 
 bool MerkleTree::lookupL0(const char* hash){
-    int fd = open(this->meta_path[0], O_RDONLY, 777);
+    int fd = open(this->meta_path[0], O_RDONLY, 0777);
     int hash_cache_length = L0_META_DATA_SIZE*1024*1024;
     char *hash_cache = (char*)malloc(sizeof(char)*hash_cache_length);
     int n = read(fd, hash_cache, hash_cache_length);
@@ -156,7 +156,7 @@ bool MerkleTree::lookupL0(const char* hash){
 
 // char和unsigned char不能比较！！！
 bool MerkleTree::lookupLP(const char* hash, int P){
-    int fd = open(this->meta_path[P], O_RDONLY, 777);
+    int fd = open(this->meta_path[P], O_RDONLY, 0777);
     int hash_cache_length = SHA_DIGEST_LENGTH*1024*1024;
     char *hash_cache = (char*)malloc(sizeof(char)*hash_cache_length);
     int n = read(fd, hash_cache, hash_cache_length);
@@ -178,7 +178,7 @@ bool MerkleTree::lookupLP(const char* hash, int P){
 }
 
 void MerkleTree::insertLP(const char* hash, int level){
-    int fd = open(this->meta_path[level], O_RDWR | O_APPEND, 777);
+    int fd = open(this->meta_path[level], O_RDWR | O_APPEND, 0777);
     write(fd, hash, SHA_DIGEST_LENGTH);
     close(fd);
 }

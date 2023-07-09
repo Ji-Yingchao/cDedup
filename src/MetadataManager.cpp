@@ -40,7 +40,7 @@ int MetadataManager::save(){
     int fd = open(this->metadata_file_path.c_str(), O_WRONLY | O_CREAT);
     lseek(fd, 0, SEEK_SET);
     ftruncate(fd,0);
-    
+
     int count = 0;
     
     for(auto item : this->fp_table_added){
@@ -106,4 +106,23 @@ int MetadataManager::decRefCnt(const SHA1FP sha1){
 
 ENTRY_VALUE MetadataManager::getEntry(const SHA1FP sha1){
     return this->fp_table_origin[sha1];
+}
+
+
+int MetadataManager::chunkOffsetDec(SHA1FP sha1, int oft, int len){
+    auto dedupIter = this->fp_table_origin.find(sha1);
+    if(dedupIter != this->fp_table_origin.end()){
+        if(dedupIter->second.offset > oft)
+            dedupIter->second.offset -= len;
+        return 0;
+    }
+
+    dedupIter = this->fp_table_added.find(sha1);
+    if(dedupIter != this->fp_table_added.end()){
+        if(dedupIter->second.offset > oft)
+            dedupIter->second.offset -= len;
+        return 0;
+    }
+    printf("MetadataManager::chunkOffsetDec error\n");
+    exit(-1);
 }

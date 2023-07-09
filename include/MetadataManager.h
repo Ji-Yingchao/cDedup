@@ -35,6 +35,10 @@ struct TupleHasher {
     }
 };
 
+// bool operator == (const SHA1FP &lhs, const SHA1FP &rhs) {
+//         return lhs.fp1 == rhs.fp1 && lhs.fp2 == rhs.fp2 && lhs.fp3 == rhs.fp3 && lhs.fp4 == rhs.fp4;
+// }
+
 struct TupleEqualer {
     bool operator()(const SHA1FP &lhs, const SHA1FP &rhs) const {
         return lhs.fp1 == rhs.fp1 && lhs.fp2 == rhs.fp2 && lhs.fp3 == rhs.fp3 && lhs.fp4 == rhs.fp4;
@@ -53,6 +57,7 @@ class MetadataManager {
         int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value);
         int addRefCnt(const SHA1FP sha1);
         int decRefCnt(const SHA1FP sha1);
+        int chunkOffsetDec(SHA1FP sha1, int oft, int len);
         ENTRY_VALUE getEntry(const SHA1FP sha1);
 
     private:
