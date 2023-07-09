@@ -529,13 +529,17 @@ int main(int argc, char** argv){
                 int dv = GlobalMetadataManagerPtr->decRefCnt(fp);
 
                 if(dv == 0){
-                    // ++ delete chunk
+                    ;// ++ count(delete chunk)
                 }
         }
 
         std::string abs_file = getRecipeNameFromVersion(Config::getInstance().getRestoreVersion(),
                                         Config::getInstance().getFileRecipesPath().c_str());
         remove(abs_file.c_str());
+
+        GlobalMetadataManagerPtr->save();
+
+        
     }
 
     gettimeofday(&t1, NULL);

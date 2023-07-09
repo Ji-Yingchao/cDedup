@@ -3,7 +3,7 @@
     "InputFile": "TEST/aa.pdf",
     "RestorePath": "TEST/res_aa.pdf",
     "RestoreVersion": 0,
-    "ChunkingMethod": "file",
+    "ChunkingMethod": "cdc",
     "RestoreId": 0,
     "DeleteId": 0,
     "Size": 4096,
