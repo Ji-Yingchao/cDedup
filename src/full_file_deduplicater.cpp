@@ -29,7 +29,7 @@ uint32_t file_uint32chg(int fd, size_t offset, int delta){
 */
 void FullFileDeduplicater::compute_file_hash(const char* input_file_path, unsigned char* hash){
     unsigned char * full_file_cache = (unsigned char *)malloc(FILE_CACHE);
-    int fd = open(input_file_path, O_RDONLY, 777);
+    int fd = open(input_file_path, O_RDONLY, 0777);
     if(fd < 0){
         printf("compute_file_hash: open file fail.\n");
         return;
@@ -43,7 +43,7 @@ void FullFileDeduplicater::compute_file_hash(const char* input_file_path, unsign
     扫描指纹文件，每20字节对比，如果找到匹配，那么该文件是重复的。
 */
 uint32_t FullFileDeduplicater::scan_and_insert_hash(const unsigned char* hash){
-    int fd = open(this->fingerprint_path.c_str(), O_RDONLY, 777);
+    int fd = open(this->fingerprint_path.c_str(), O_RDONLY, 0777);
     unsigned char file_fingerprints_cache[FILE_FINGERPRINTS_CACHE] = {0};
     read(fd, file_fingerprints_cache, FILE_FINGERPRINTS_CACHE);
     for(int i=0; i<=this->files_num-1; i++){
@@ -54,7 +54,7 @@ uint32_t FullFileDeduplicater::scan_and_insert_hash(const unsigned char* hash){
                 this->file_id = i; // 找到编号为i的hash
                 this->file_exist = true;
                 close(fd);
-                fd = open(this->fingerprint_path.c_str(), O_RDWR, 777);
+                fd = open(this->fingerprint_path.c_str(), O_RDWR, 0777);
                 uint32_t ft = file_uint32chg(fd, i*ENTRY_LENGTH + HASH_LENGTH, 1);
                 close(fd);
                 return ft;
@@ -69,7 +69,7 @@ uint32_t FullFileDeduplicater::scan_and_insert_hash(const unsigned char* hash){
 }
 
 uint32_t FullFileDeduplicater::scan_and_delete_hash(const unsigned char* hash){
-    int fd = open(this->fingerprint_path.c_str(), O_RDONLY, 777);
+    int fd = open(this->fingerprint_path.c_str(), O_RDONLY, 0777);
     unsigned char file_fingerprints_cache[FILE_FINGERPRINTS_CACHE] = {0};
     read(fd, file_fingerprints_cache, FILE_FINGERPRINTS_CACHE);
     for(int i=0; i<=this->files_num-1; i++){
@@ -80,7 +80,7 @@ uint32_t FullFileDeduplicater::scan_and_delete_hash(const unsigned char* hash){
                 // this->file_id = i; // 找到编号为i的hash
                 // this->file_exist = true;
                 close(fd);
-                fd = open(this->fingerprint_path.c_str(), O_RDWR, 777);
+                fd = open(this->fingerprint_path.c_str(), O_RDWR, 0777);
                 uint32_t ft = file_uint32chg(fd, i*ENTRY_LENGTH + HASH_LENGTH, -1);
                 close(fd);
                 return ft;
@@ -92,7 +92,7 @@ uint32_t FullFileDeduplicater::scan_and_delete_hash(const unsigned char* hash){
 }
 
 void FullFileDeduplicater::insert_hash(const unsigned char* hash){
-    int fd = open(this->fingerprint_path.c_str(), O_RDWR | O_APPEND, 777);
+    int fd = open(this->fingerprint_path.c_str(), O_RDWR | O_APPEND, 0777);
     write(fd, hash, HASH_LENGTH);
     const uint32_t uc = 1;
     write(fd, &uc, COUNT_LENGTH);
@@ -104,7 +104,7 @@ void FullFileDeduplicater::insert_hash(const unsigned char* hash){
     默认使用SHA1，每个指纹20字节
 */
 void FullFileDeduplicater::init_files_num(){
-    int fd = open(this->fingerprint_path.c_str(), O_RDONLY, 777);
+    int fd = open(this->fingerprint_path.c_str(), O_RDONLY, 0777);
     struct stat _stat;
     fstat(fd, &_stat);
     this->files_num = _stat.st_size / (ENTRY_LENGTH); 
@@ -113,8 +113,8 @@ void FullFileDeduplicater::init_files_num(){
 
 void FullFileDeduplicater::restoreFile(int file_id, const char* restore_path){
     std::string abs_saved_file_name = generate_abs_file_name_from_file_id(this->storage_path, file_id); 
-    int fd_new = open(restore_path, O_CREAT | O_RDWR, 777);
-    int fd_saved = open(abs_saved_file_name.c_str(), O_RDONLY, 777);
+    int fd_new = open(restore_path, O_CREAT | O_RDWR, 0777);
+    int fd_saved = open(abs_saved_file_name.c_str(), O_RDONLY, 0777);
     sendfile(fd_new, fd_saved, NULL, FULL_FILE_CACHE);
 }
 
@@ -140,8 +140,8 @@ int FullFileDeduplicater::get_file_id(){
 
 void FullFileDeduplicater::save_file(const char* input_file_path){
     std::string abs_file_name = generate_abs_file_name_from_file_id(this->storage_path, this->file_id); 
-    int fd_new = open(abs_file_name.c_str(), O_CREAT | O_RDWR, 777);
-    int fd_input = open(input_file_path, O_RDONLY, 777);
+    int fd_new = open(abs_file_name.c_str(), O_CREAT | O_RDWR, 0777);
+    int fd_input = open(input_file_path, O_RDONLY, 0777);
     sendfile(fd_new, fd_input, NULL, FULL_FILE_CACHE);
 }
 
