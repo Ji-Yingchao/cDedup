@@ -115,16 +115,16 @@ uint64_t FING_GEAR_32KB_64 = 0x0000d9f003530000;
 uint64_t FING_GEAR_02KB_64 = 0x0000d90003530000;
 
 // NC level 1
-uint64_t Mask14 = 0x0000d9f003530000;
-uint64_t Mask12 = 0x0000d90003530000;
+uint64_t Mask14 = 0x0000d9f003520000;
+uint64_t Mask12 = 0x0000d90003570000;
 
 //NC level 2
 uint64_t Mask15 = 0x0000d9f003530000;
 uint64_t Mask11 = 0x0000d90003530000;
 
 // NC level 3
-uint64_t Mask16 = 0x0000d9f003530000;
-uint64_t Mask10 = 0x0000d90003530000;
+uint64_t Mask16 = 0x0000d9f003570000;
+uint64_t Mask10 = 0x0000d90003520000;
 
 // NC combination
 uint32_t Mask_front;
