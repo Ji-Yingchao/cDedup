@@ -446,7 +446,7 @@ int main(int argc, char** argv){
         printf("Sum data size %d\n",      sum_size);
         printf("Dedup chunks num %d\n",   dedup_chunks);
         printf("Dedup data size %d\n",    dedup_size);
-        printf("Dedup Ratio %.2f%\n",     double(dedup_chunks) / sum_chunks *100);
+        printf("Dedup Ratio %.2f%\n",     double(dedup_size) / double(sum_size) *100);
         close(idf);
 
     }else if(Config::getInstance().getTaskType() == TASK_RESTORE){
