@@ -120,7 +120,7 @@ void saveContainer(int container_index, unsigned char* container_buf, unsigned i
     close(fd);
     container_name.append("r");
     fd = open(container_name.data(), O_WRONLY | O_CREAT, 0777);
-    printf("rev_container_cnt: %d\n",rev_container_cnt);
+    //printf("rev_container_cnt: %d\n",rev_container_cnt);
     write(fd, &rev_container_cnt, sizeof(uint32_t));
     write(fd, &rev_container_buf, rev_container_cnt * sizeof(SHA1FP));
     close(fd);
