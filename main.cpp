@@ -219,7 +219,7 @@ void flushAssemblingBuffer(int fd, unsigned char* buf, int len){
         printf("Restore, write file error!!!\n");
         exit(-1);
     }
-    close(fd);
+    //close(fd);
 }
 
 int main(int argc, char** argv){
@@ -394,6 +394,12 @@ int main(int argc, char** argv){
 
                 // 
                 if(lookup_result == Unique){
+                     // save chunk itself
+                    saveChunkToContainer(container_buf_pointer, container_buf, 
+                                        container_index, container_inner_offset, container_inner_index,
+                                        chunk_length, file_offset, file_cache, (void*)&sha1_fp,
+                                        Config::getInstance().getContainersPath().c_str());
+
                     // save chunk metadata
                     entry_value.container_number = container_index;
                     entry_value.offset = container_inner_offset;
@@ -401,14 +407,8 @@ int main(int argc, char** argv){
                     entry_value.container_inner_index = container_inner_index;
                     entry_value.ref_cnt = 1;
                     GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value);
-
-                    // save chunk itself
-                    saveChunkToContainer(container_buf_pointer, container_buf, 
-                                        container_index, container_inner_offset, container_inner_index,
-                                        chunk_length, file_offset, file_cache, (void*)&sha1_fp,
-                                        Config::getInstance().getContainersPath().c_str());
-
-                    // 
+                    
+                    // rev
                     container_inner_offset += chunk_length;
                     container_buf_pointer += chunk_length;
                     container_inner_index ++;
