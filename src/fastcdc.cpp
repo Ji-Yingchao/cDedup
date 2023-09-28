@@ -127,8 +127,8 @@ uint64_t Mask16 = 0x0000d9f003570000;
 uint64_t Mask10 = 0x0000d90003520000;
 
 // NC combination
-uint32_t Mask_front;
-uint32_t Mask_back;
+uint64_t Mask_front;
+uint64_t Mask_back;
 
                                                       
 // global variants
@@ -249,13 +249,19 @@ int FastCDC_without_NC(unsigned char *p, int n) {
 
 // FSC
 int FSC_4(unsigned char *p, int n) {
-    return 4*1024;
+    if(n>=4096)
+        return 4*1024;
+    return n;
 }
 
 int FSC_8(unsigned char *p, int n) {
-    return 8*1024;
+    if(n>=8192)
+        return 8*1024;
+    return n;
 }
 
 int FSC_16(unsigned char *p, int n) {
-    return 16*1024;
+    if(n>=16384)
+        return 16*1024;
+    return n;
 }
