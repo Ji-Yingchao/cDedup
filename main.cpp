@@ -315,11 +315,11 @@ int main(int argc, char** argv){
         struct ENTRY_VALUE entry_value;
 
         // 重删统计
-        int dedup_chunks = 0;
-        int sum_chunks = 0;
-        int sum_size = 0;
-        int dedup_size = 0;
-        int hash_collision_sum = 0;
+        long long dedup_chunks = 0;
+        long long sum_chunks = 0;
+        long long sum_size = 0;
+        long long dedup_size = 0;
+        long long  hash_collision_sum = 0;
 
         // 梅克尔树重删 由于树内部块没参与重删，可能会降低重删率。
         // 暂不支持大于FILE CACHE大小文件的重删
@@ -441,11 +441,11 @@ int main(int argc, char** argv){
 
         // 写文件 - 重删统计
         printf("-----------------------Dedup statics----------------------\n");
-        printf("Hash collision num %d\n", hash_collision_sum); // should be zero
-        printf("Sum chunks num %d\n",     sum_chunks);
-        printf("Sum data size %d\n",      sum_size);
-        printf("Dedup chunks num %d\n",   dedup_chunks);
-        printf("Dedup data size %d\n",    dedup_size);
+        printf("Hash collision num %lld\n", hash_collision_sum); // should be zero
+        printf("Sum chunks num %lld\n",     sum_chunks);
+        printf("Sum data size %lld\n",      sum_size);
+        printf("Dedup chunks num %lld\n",   dedup_chunks);
+        printf("Dedup data size %lld\n",    dedup_size);
         printf("Dedup Ratio %.2f%\n",     double(dedup_size) / double(sum_size) *100);
         close(idf);
 
