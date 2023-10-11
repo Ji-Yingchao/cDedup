@@ -303,7 +303,7 @@ int main(int argc, char** argv){
         // metadata entry(except FP)
         uint32_t container_index = getFilesNum(Config::getInstance().getContainersPath().c_str());
         uint32_t container_inner_offset = 0;
-        uint16_t chunk_length = 0;
+        uint32_t chunk_length = 0;
         uint16_t container_inner_index = 0;
 
         unsigned char container_buf[CONTAINER_SIZE]={0};
