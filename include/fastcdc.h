@@ -19,6 +19,7 @@ int FastCDC_without_NC(unsigned char *p, int n);
 int FastCDC_with_NC(unsigned char *p, int n);
 
 // FSC
+int FSC_512(unsigned char *p, int n);
 int FSC_4(unsigned char *p, int n);
 int FSC_8(unsigned char *p, int n);
 int FSC_16(unsigned char *p, int n);

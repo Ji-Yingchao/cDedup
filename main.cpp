@@ -275,6 +275,8 @@ int main(int argc, char** argv){
             chunking = FSC_8;
         }else if(avg_size == 16*1024){
             chunking = FSC_16;
+        }else if(avg_size == 512){
+            chunking = FSC_512;
         }else{
             printf("Invalid fixed size, the support size is 4 or 8 or 16\n");
             return 0;
