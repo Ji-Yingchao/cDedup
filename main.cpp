@@ -23,11 +23,14 @@
 #include "FAA.h"
 #include "config.h"
 #include "utils/cJSON.h"
+#include "compressor.h"
+#include "global_stat.h"
 
 
 uint32_t rev_container_cnt = 0;
 unsigned char rev_container_buf[CONTAINER_SIZE]={0};
 unsigned char tmp_buf[CONTAINER_SIZE]={0};
+char* global_stat_path = "/home/cyf/cDedup/global_stat.json";
 
 
 int (*chunking) (unsigned char*p, int n);
@@ -228,6 +231,9 @@ int main(int argc, char** argv){
 
     // 参数解析
     Config::getInstance().parse_argument(argc, argv);
+
+    // 全局重删压缩信息解析
+    GlobalStat::getInstance().parse_arguments(global_stat_path);
     
     // 一次任务的总时间
     // MFDedup并没有计算load FP-index的时间
@@ -323,6 +329,9 @@ int main(int argc, char** argv){
         long long dedup_size = 0;
         long long  hash_collision_sum = 0;
 
+        //模拟压缩
+        Compressor compressor;
+
         // 梅克尔树重删 由于树内部块没参与重删，可能会降低重删率。
         // 暂不支持大于FILE CACHE大小文件的重删
         if(Config::getInstance().getMerkleTree()){
@@ -396,7 +405,10 @@ int main(int argc, char** argv){
 
                 // 
                 if(lookup_result == Unique){
-                     // save chunk itself
+                    // compressor simulator
+                    compressor.compress(file_cache + file_offset, chunk_length);
+                    
+                    // save chunk itself
                     saveChunkToContainer(container_buf_pointer, container_buf, 
                                         container_index, container_inner_offset, container_inner_index,
                                         chunk_length, file_offset, file_cache, (void*)&sha1_fp,
@@ -446,10 +458,26 @@ int main(int argc, char** argv){
         printf("Hash collision num %lld\n", hash_collision_sum); // should be zero
         printf("Sum chunks num %lld\n",     sum_chunks);
         printf("Sum data size %lld\n",      sum_size);
+        printf("Average chunk size(all) %d\n", sum_size/sum_chunks);
         printf("Dedup chunks num %lld\n",   dedup_chunks);
         printf("Dedup data size %lld\n",    dedup_size);
+        printf("-----------------------Compressor simulator statics----------------------\n");
+        printf("Compressed chunk num %lld\n",     compressor.get_chunk_num());
+        printf("Size before compression %lld\n",     compressor.get_size_before_compression());
+        printf("Size after compression %lld\n",     compressor.get_size_after_compression());
+        printf("-----------------------statics----------------------\n");
         printf("Dedup Ratio %.2f%\n",     double(dedup_size) / double(sum_size) *100);
+        printf("Compression ratio %.2f%\n",     (1-(double)compressor.get_size_after_compression()/(double)compressor.get_size_before_compression())*100);
+        printf("Data Reduction Ratio %.2f%\n",     (1-(double)compressor.get_size_after_compression()/(double)sum_size)*100);
         close(idf);
+
+        // 更新全局信息
+        GlobalStat::getInstance().update_kb(sum_size/1024,
+                                            compressor.get_size_before_compression()/1024,
+                                            compressor.get_size_after_compression()/1024);
+
+        // 保存全局信息
+        GlobalStat::getInstance().save_arguments(global_stat_path);
 
     }else if(Config::getInstance().getTaskType() == TASK_RESTORE){
         int restore_size = 0;
@@ -632,8 +660,10 @@ int main(int argc, char** argv){
 
     gettimeofday(&t1, NULL);
     uint64_t single_dedup_time_us = (t1.tv_sec - t0.tv_sec) * 1000000 + t1.tv_usec - t0.tv_usec;
-    if(Config::getInstance().getTaskType() == TASK_WRITE)
+    if(Config::getInstance().getTaskType() == TASK_WRITE){
+        printf("\n");
         printf("Backup duration:%lu us\n", single_dedup_time_us);
+    }
     else if(Config::getInstance().getTaskType() == TASK_RESTORE)
         printf("Restore duration:%lu us\n", single_dedup_time_us);
     else if(Config::getInstance().getTaskType() == TASK_DELETE)
