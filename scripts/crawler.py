@@ -66,11 +66,13 @@ if __name__ == '__main__':
 
     # urls = ['https://cloud-images.ubuntu.com/xenial/']
 
-    urls = ['https://cloud-images.ubuntu.com/bionic/',
-            'https://cloud-images.ubuntu.com/focal/',
-            'https://cloud-images.ubuntu.com/jammy/',
-            'https://cloud-images.ubuntu.com/lunar/',
-            'https://cloud-images.ubuntu.com/mantic/']
+    urls = ['https://cloud-images.ubuntu.com/mantic/']
+
+    # urls = ['https://cloud-images.ubuntu.com/bionic/',
+    #         'https://cloud-images.ubuntu.com/focal/',
+    #         'https://cloud-images.ubuntu.com/jammy/',
+    #         'https://cloud-images.ubuntu.com/lunar/',
+    #         'https://cloud-images.ubuntu.com/mantic/']
     
     for url in urls:
         process_version_page(url)

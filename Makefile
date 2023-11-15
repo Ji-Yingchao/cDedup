@@ -1,12 +1,13 @@
 CC = gcc
-LIB = -lcrypto -lz -lstdc++
+LIB = -lcrypto -lz -lstdc++ -llz4
 SRC = main.cpp ./src/fastcdc.cpp ./src/full_file_deduplicater.cpp ./src/merkle_tree.cpp \
 	  ./src/MetadataManager.cpp ./src/ContainerCache.cpp ./src/ChunkCache.cpp \
+	  ./src/compressor.cpp \
       ./utils/cJSON.c
 EXE_NAME = cDedup
 
 amazing:
-	$(CC)  $(SRC) $(LIB) -o $(EXE_NAME) -g -I./include -I./utils
+	$(CC)  $(SRC) $(LIB) -o $(EXE_NAME) -g -I./include -I./utils -I./utils/lz4-1.9.1/lib -L./utils/lz4-1.9.1/lib
 
 clean:
 	rm $(EXE_NAME) \

@@ -126,9 +126,6 @@ uint64_t Mask11 = 0x0000d90003530000;
 uint64_t Mask16 = 0x0000d9f003570000;
 uint64_t Mask10 = 0x0000d90003520000;
 
-// without NC
-uint64_t Mask9 = 0x0000d90202220000;
-
 // NC combination
 uint64_t Mask_front;
 uint64_t Mask_back;
@@ -170,8 +167,8 @@ void fastCDC_init(int fas, int NC_level) {
         LEARv2[i] = GEARv2[i] << 1;
     }
 
-    MinSize = fas / 16;
-    MaxSize = fas * 2;
+    MinSize = fas / 4;
+    MaxSize = fas * 4;
     fastcdc_avg_size = fas;
 
     if(NC_level == 1){
@@ -244,7 +241,7 @@ int FastCDC_without_NC(unsigned char *p, int n) {
 
     for ( ;i<n ;i++) {
         fingerprint = (fingerprint << 1) + (GEARv2[p[i]]);
-        if ((!(fingerprint & Mask9)))
+        if ((!(fingerprint & FING_GEAR_08KB_64)))
             return i;
     }
     return n;
