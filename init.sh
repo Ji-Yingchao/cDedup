@@ -17,3 +17,5 @@ touch TEST/metadata/L4.meta
 touch TEST/metadata/L5.meta
 touch TEST/metadata/L6.meta
 
+source ./scripts/cleaar_global_stat.sh
+
