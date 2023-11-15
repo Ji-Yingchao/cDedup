@@ -3,6 +3,7 @@
 #include<iostream>
 #include <string.h>
 #include"cJSON.h"
+#include <unistd.h>
 using namespace std;
 
 // json好像不支持long long
@@ -75,7 +76,7 @@ public:
     void save_arguments(char * json_path)
     {
         //Parsing路径和Saving路径务必一致
-        char source[2000 + 1];
+        char source[2000 + 1]={0};
         FILE *fp = fopen(json_path, "r+");
         if (fp != NULL) {
             size_t newLen = fread(source, sizeof(char), 1001, fp);
@@ -89,14 +90,15 @@ public:
         }
 
         cJSON *config = cJSON_Parse(source);
-        cJSON_ReplaceItemInObject(config, "Size", cJSON_CreateNumber(GlobalStat::getInstance().getTotalSize()));
-        cJSON_ReplaceItemInObject(config, "SizeBeforeCompression", cJSON_CreateNumber(GlobalStat::getInstance().getSizeBeforeCompression()));
-        cJSON_ReplaceItemInObject(config, "SizeAfterCompression", cJSON_CreateNumber(GlobalStat::getInstance().getSizeAfterCompression()));
+        cJSON_ReplaceItemInObject(config, "Size", cJSON_CreateNumber((double)GlobalStat::getInstance().getTotalSize()));
+        cJSON_ReplaceItemInObject(config, "SizeBeforeCompression", cJSON_CreateNumber((double)GlobalStat::getInstance().getSizeBeforeCompression()));
+        cJSON_ReplaceItemInObject(config, "SizeAfterCompression", cJSON_CreateNumber((double)GlobalStat::getInstance().getSizeAfterCompression()));
         cJSON_ReplaceItemInObject(config, "DeduplicationRatio", cJSON_CreateNumber(GlobalStat::getInstance().getDR()));
         cJSON_ReplaceItemInObject(config, "CompressionRatio", cJSON_CreateNumber(GlobalStat::getInstance().getCR()));
         cJSON_ReplaceItemInObject(config, "DataReductionRatio", cJSON_CreateNumber(GlobalStat::getInstance().getDRR()));
         
         char *cjValue = cJSON_Print(config);
+        ftruncate(fileno(fp), 0);
         fseek(fp, 0, SEEK_SET);
         int ret = fwrite((void*)cjValue, sizeof(char), strlen(cjValue), fp);
         if (ret < 0) {
