@@ -1,9 +1,6 @@
 #!/bin/bash
 # 这里的配置需要和参数json一致
-
-rm -fr ./working/Containers
-rm -fr ./working/FULL_FILE_STORAGE
-rm -fr ./working/metadata
+rm -fr ./working/
 
 mkdir ./working/
 mkdir ./working/Containers
