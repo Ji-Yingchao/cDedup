@@ -1,21 +1,23 @@
 #!/bin/bash
 # 这里的配置需要和参数json一致
 
-rm -fr ./metadata
+rm -fr ./working/Containers
+rm -fr ./working/FULL_FILE_STORAGE
+rm -fr ./working/metadata
 
-mkdir ./metadata
-mkdir ./metadata/FileRecipes
-mkdir ./metadata/Containers
-mkdir ./metadata/FULL_FILE_STORAGE
+mkdir ./working/
+mkdir ./working/Containers
+mkdir ./working/FULL_FILE_STORAGE
+mkdir ./working/metadata
 
-touch ./metadata/fingerprints.meta
-touch ./metadata/FFFP.meta
-touch ./metadata/L1.meta
-touch ./metadata/L2.meta
-touch ./metadata/L3.meta
-touch ./metadata/L4.meta
-touch ./metadata/L5.meta
-touch ./metadata/L6.meta
+touch ./working/metadata/fingerprints.meta
+touch ./working/metadata/FFFP.meta
+touch ./working/metadata/L1.meta
+touch ./working/metadata/L2.meta
+touch ./working/metadata/L3.meta
+touch ./working/metadata/L4.meta
+touch ./working/metadata/L5.meta
+touch ./working/metadata/L6.meta
 
-source ./scripts/cleaar_global_stat.sh
+source ./scripts/clear_global_stat.sh
 

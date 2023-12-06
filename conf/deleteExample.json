@@ -1,7 +1,7 @@
 {
     "Task": "delete",
-    "InputFile": "TEST/aa.pdf",
-    "RestorePath": "TEST/res_aa.pdf",
+    "InputFile": "working/aa.pdf",
+    "RestorePath": "working/res_aa.pdf",
     "RestoreVersion": 0,
     "ChunkingMethod": "cdc",
     "RestoreId": 0,
@@ -11,17 +11,17 @@
     "MerkleTree": "no",
     "RestoreMethod": "faa_fixed",
 
-    "fingerprintsFilePath": "TEST/metadata/fingerprints.meta",
-    "fileRecipesPath": "TEST/metadata/FileRecipes",
-    "containersPath": "TEST/metadata/Containers",
-    "fullFileFingerprintsPath": "TEST/metadata/FFFP.meta",
-    "fullFileStoragePath": "TEST/metadata/FULL_FILE_STORAGE",
+    "fingerprintsFilePath": "working/metadata/fingerprints.meta",
+    "fileRecipesPath": "working/metadata/FileRecipes",
+    "containersPath": "working/metadata/Containers",
+    "fullFileFingerprintsPath": "working/metadata/FFFP.meta",
+    "fullFileStoragePath": "working/metadata/FULL_FILE_STORAGE",
  
-    "MTL1": "TEST/metadata/L1.meta", 
-    "MTL2": "TEST/metadata/L2.meta",
-    "MTL3": "TEST/metadata/L3.meta",
-    "MTL4": "TEST/metadata/L4.meta",
-    "MTL5": "TEST/metadata/L5.meta",
-    "MTL6": "TEST/metadata/L6.meta"
+    "MTL1": "working/metadata/L1.meta", 
+    "MTL2": "working/metadata/L2.meta",
+    "MTL3": "working/metadata/L3.meta",
+    "MTL4": "working/metadata/L4.meta",
+    "MTL5": "working/metadata/L5.meta",
+    "MTL6": "working/metadata/L6.meta"
 }
   
