@@ -6,6 +6,7 @@ mkdir ./working/
 mkdir ./working/Containers
 mkdir ./working/FULL_FILE_STORAGE
 mkdir ./working/metadata
+mkdir ./working/metadata/FileRecipes
 
 touch ./working/metadata/fingerprints.meta
 touch ./working/metadata/FFFP.meta
