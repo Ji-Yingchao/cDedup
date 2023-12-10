@@ -4,6 +4,6 @@
 
     "fingerprintsFilePath": "working/metadata/fingerprints.meta",
     "fileRecipesPath": "working/metadata/FileRecipes",
-    "containersPath": "working/metadata/Containers"
+    "containersPath": "working/Containers"
 }
   
