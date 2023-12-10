@@ -1,27 +1,10 @@
 {
-    "Task": "restore",
-    "InputFile": "working/aa.pdf",
-    "RestorePath": "working/res_aa.pdf",
-    "RestoreVersion": 0,
-    "ChunkingMethod": "file",
-    "RestoreId": 0,
-    "DeleteId": 0,
-    "Size": 4,
-    "Normal": 2,
-    "MerkleTree": "no",
-    "RestoreMethod": "faa_fixed",
-
-    "fingerprintsFilePath": "working/metadata/fingerprints.meta",
-    "fileRecipesPath": "working/metadata/FileRecipes",
-    "containersPath": "working/metadata/Containers",
-    "fullFileFingerprintsPath": "working/metadata/FFFP.meta",
-    "fullFileStoragePath": "working/metadata/FULL_FILE_STORAGE",
- 
-    "MTL1": "working/metadata/L1.meta", 
-    "MTL2": "working/metadata/L2.meta",
-    "MTL3": "working/metadata/L3.meta",
-    "MTL4": "working/metadata/L4.meta",
-    "MTL5": "working/metadata/L5.meta",
-    "MTL6": "working/metadata/L6.meta"
+  "Task": "restore",
+  "RestorePath": "/home/cyf/dataHDD/working/restoreFolder/restore19",
+  "RestoreVersion": 19,
+  "ChunkingMethod": "cdc",
+  "RestoreMethod": "chunk",
+  "fingerprintsFilePath": "/home/cyf/dataSSD/working/metadata/fingerprints.meta",
+  "fileRecipesPath": "/home/cyf/dataSSD/working/metadata/FileRecipes",
+  "containersPath": "/home/cyf/dataSSD/working/Containers"
 }
-  

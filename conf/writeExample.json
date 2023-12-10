@@ -1,24 +1,11 @@
 {
   "Task": "write",
-  "InputFile": "/home/cyf/dataHDD/linuxVersion/linux-5.1.8.tar",
-  "RestorePath": "working/res_aa.pdf",
-  "RestoreVersion": 0,
+  "InputFile": "/home/cyf/dataSSD/linuxVersion2/linux-5.0.9.tar",
   "ChunkingMethod": "cdc",
-  "RestoreId": 0,
-  "DeleteId": 0,
   "Size": 4096,
   "Normal": 2,
   "MerkleTree": "no",
-  "RestoreMethod": "faa_fixed",
-  "containersPath": "/home/cyf/cDedup/working/Containers",
-  "fullFileStoragePath": "/home/cyf/cDedup/working/FULL_FILE_STORAGE",
-  "fileRecipesPath": "/home/cyf/cDedup/working/metadata/FileRecipes",
-  "fingerprintsFilePath": "/home/cyf/cDedup/working/metadata/fingerprints.meta",
-  "fullFileFingerprintsPath": "/home/cyf/cDedup/working/metadata/FFFP.meta",
-  "MTL1": "working/metadata/L1.meta",
-  "MTL2": "working/metadata/L2.meta",
-  "MTL3": "working/metadata/L3.meta",
-  "MTL4": "working/metadata/L4.meta",
-  "MTL5": "working/metadata/L5.meta",
-  "MTL6": "working/metadata/L6.meta"
+  "containersPath": "/home/cyf/dataSSD/working/Containers",
+  "fileRecipesPath": "/home/cyf/dataSSD/working/metadata/FileRecipes",
+  "fingerprintsFilePath": "/home/cyf/dataSSD/working/metadata/fingerprints.meta"
 }

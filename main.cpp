@@ -26,6 +26,8 @@
 #include "compressor.h"
 #include "global_stat.h"
 
+#define MB (1024*1024)
+//#define ENABLE_COMPRESSION
 
 uint32_t rev_container_cnt = 0;
 unsigned char rev_container_buf[CONTAINER_SIZE]={0};
@@ -235,11 +237,6 @@ int main(int argc, char** argv){
     // 全局重删压缩信息解析
     GlobalStat::getInstance().parse_arguments(global_stat_path);
     
-    // 一次任务的总时间
-    // MFDedup并没有计算load FP-index的时间
-    struct timeval t0, t1;
-    gettimeofday(&t0, NULL);
-    
     if(Config::getInstance().getChunkingMethod() == FULL_FILE){
         FullFileDeduplicater ffd(Config::getInstance().getFullFileStoragePath(), 
                                  Config::getInstance().getFullFileFingerprintsPath());
@@ -296,6 +293,13 @@ int main(int argc, char** argv){
     }
 
     if(Config::getInstance().getTaskType() == TASK_WRITE){
+        // 一次任务的总时间
+        // MFDedup并没有计算load FP-index的时间
+        struct timeval backup_time_start, backup_time_end;
+        struct timeval read_file_time_start, read_file_time_end;
+        uint64_t timeused_readfile = 0;
+        gettimeofday(&backup_time_start, NULL);
+
         int idf = open(Config::getInstance().getInputPath().c_str(), O_RDONLY, 0777);
         if(idf < 0){
             printf("open file error, id %d, %s\n", errno, strerror(errno));
@@ -329,8 +333,10 @@ int main(int argc, char** argv){
         long long dedup_size = 0;
         long long  hash_collision_sum = 0;
 
+        #ifdef ENABLE_COMPRESSION
         //模拟压缩
         Compressor compressor;
+        #endif
 
         // 梅克尔树重删 由于树内部块没参与重删，可能会降低重删率。
         // 暂不支持大于FILE CACHE大小文件的重删
@@ -377,10 +383,16 @@ int main(int argc, char** argv){
             goto writend;
         }
 
+        
         // 普通分块重删，来一个块查寻一次，然后把non-duplicate chunk保存到container去
         for(;;){
             file_offset = 0;
+            gettimeofday(&read_file_time_start, NULL);
             n_read = read(idf, file_cache, FILE_CACHE);
+            gettimeofday(&read_file_time_end, NULL);
+            timeused_readfile += (read_file_time_end.tv_sec - read_file_time_start.tv_sec) * 1000000 + 
+                                  read_file_time_end.tv_usec - read_file_time_start.tv_usec;
+
             if(n_read <= 0){
                 break;
             }
@@ -405,9 +417,11 @@ int main(int argc, char** argv){
 
                 // 
                 if(lookup_result == Unique){
+                    #ifdef ENABLE_COMPRESSION
                     // compressor simulator
                     compressor.compress(file_cache + file_offset, chunk_length);
-                    
+                    #endif
+
                     // save chunk itself
                     saveChunkToContainer(container_buf_pointer, container_buf, 
                                         container_index, container_inner_offset, container_inner_index,
@@ -453,6 +467,12 @@ int main(int argc, char** argv){
         // save metadata entry
         GlobalMetadataManagerPtr->save();
 
+        // throughput
+        gettimeofday(&backup_time_end, NULL);
+
+        uint64_t single_dedup_time_us = (backup_time_end.tv_sec - backup_time_start.tv_sec) * 1000000 + backup_time_end.tv_usec - backup_time_start.tv_usec;
+        float throughput = (float)(sum_size) / MB / ((float)(single_dedup_time_us)/1000000);
+
         // 写文件 - 重删统计
         printf("-----------------------Dedup statics----------------------\n");
         printf("Hash collision num %lld\n", hash_collision_sum); // should be zero
@@ -461,25 +481,35 @@ int main(int argc, char** argv){
         printf("Average chunk size(all) %d\n", sum_size/sum_chunks);
         printf("Dedup chunks num %lld\n",   dedup_chunks);
         printf("Dedup data size %lld\n",    dedup_size);
+        #ifdef ENABLE_COMPRESSION
         printf("-----------------------Compressor simulator statics----------------------\n");
         printf("Compressed chunk num %lld\n",     compressor.get_chunk_num());
         printf("Size before compression %lld\n",     compressor.get_size_before_compression());
         printf("Size after compression %lld\n",     compressor.get_size_after_compression());
+        #endif
         printf("-----------------------statics----------------------\n");
+        printf("Throughput %.2f MiB/s\n",    throughput);
         printf("Dedup Ratio %.2f%\n",     double(dedup_size) / double(sum_size) *100);
+        #ifdef ENABLE_COMPRESSION
         printf("Compression ratio %.2f%\n",     (1-(double)compressor.get_size_after_compression()/(double)compressor.get_size_before_compression())*100);
         printf("Data Reduction Ratio %.2f%\n",     (1-(double)compressor.get_size_after_compression()/(double)sum_size)*100);
+        #endif
         close(idf);
 
+        #ifdef ENABLE_COMPRESSION
         // 更新全局信息
         GlobalStat::getInstance().update_kb(sum_size/1024,
                                             compressor.get_size_before_compression()/1024,
                                             compressor.get_size_after_compression()/1024);
+        #endif
 
         // 保存全局信息
         GlobalStat::getInstance().save_arguments(global_stat_path);
 
     }else if(Config::getInstance().getTaskType() == TASK_RESTORE){
+        struct timeval restore_time_start, restore_time_end;
+        gettimeofday(&restore_time_start, NULL);
+
         int restore_size = 0;
 
         if(!fileRecipeExist(Config::getInstance().getRestoreVersion(),
@@ -615,8 +645,12 @@ int main(int argc, char** argv){
             exit(-1);
         }
 
+        gettimeofday(&restore_time_end, NULL);
+        uint64_t single_dedup_time_us = (restore_time_end.tv_sec - restore_time_start.tv_sec) * 1000000 + restore_time_end.tv_usec - restore_time_start.tv_usec;
+        float restore_throughput = (float)(restore_size) / MB / ((float)(single_dedup_time_us)/1000000);
         printf("-----------------------Restore statics----------------------\n");
         printf("Restore size %d\n", restore_size);
+        printf("Restore Throughput %.2f MiB/s\n", restore_throughput);
 
     }else if(Config::getInstance().getTaskType() == TASK_DELETE){
         // 根据 json 文件中的 fileRecipesPath 和 RestoreVersion 选择要删除的文件
@@ -657,17 +691,6 @@ int main(int argc, char** argv){
 
 
     }
-
-    gettimeofday(&t1, NULL);
-    uint64_t single_dedup_time_us = (t1.tv_sec - t0.tv_sec) * 1000000 + t1.tv_usec - t0.tv_usec;
-    if(Config::getInstance().getTaskType() == TASK_WRITE){
-        printf("\n");
-        printf("Backup duration:%lu us\n", single_dedup_time_us);
-    }
-    else if(Config::getInstance().getTaskType() == TASK_RESTORE)
-        printf("Restore duration:%lu us\n", single_dedup_time_us);
-    else if(Config::getInstance().getTaskType() == TASK_DELETE)
-        printf("Delete duration:%lu us\n", single_dedup_time_us);
 
     
     return 0;
