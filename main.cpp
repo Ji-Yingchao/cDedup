@@ -25,6 +25,8 @@
 #include "utils/cJSON.h"
 #include "compressor.h"
 #include "global_stat.h"
+#include "jcr.h"
+#include "pipeline.h"
 
 #define MB (1024*1024)
 //#define ENABLE_COMPRESSION
@@ -33,7 +35,7 @@ uint32_t rev_container_cnt = 0;
 unsigned char rev_container_buf[CONTAINER_SIZE]={0};
 unsigned char tmp_buf[CONTAINER_SIZE]={0};
 char* global_stat_path = "/home/cyf/cDedup/global_stat.json";
-
+extern MetadataManager *GlobalMetadataManagerPtr;
 
 int (*chunking) (unsigned char*p, int n);
 
@@ -292,7 +294,40 @@ int main(int argc, char** argv){
         GlobalMetadataManagerPtr->load();
     }
 
-    if(Config::getInstance().getTaskType() == TASK_WRITE){
+    if(Config::getInstance().getTaskType() == TASK_WRITE_PIPELINE){
+        //
+        init_backup_jcr();
+        
+        //total time start
+        struct timeval backup_time_start, backup_time_end;
+        gettimeofday(&backup_time_start, NULL);
+
+        //start phases
+        start_read_phase();
+		start_chunk_phase();
+		start_hash_phase();
+        start_dedup_phase();
+        
+        // wait for the last pipeline finish
+        while(jcr.status == JCR_STATUS_RUNNING || jcr.status != JCR_STATUS_DONE){
+            usleep(10);
+        }
+
+        //stop phases
+        stop_read_phase();
+		stop_chunk_phase();
+		stop_hash_phase();
+        stop_dedup_phase();
+        
+        //total time end
+        gettimeofday(&backup_time_end, NULL);
+        jcr.total_time = (backup_time_end.tv_sec - backup_time_start.tv_sec) * 1000000 + 
+                          backup_time_end.tv_usec - backup_time_start.tv_usec;
+        
+        // statistcs
+        show_backup_jcr();
+
+    }else if(Config::getInstance().getTaskType() == TASK_WRITE){
         // 一次任务的总时间
         // MFDedup并没有计算load FP-index的时间
         struct timeval backup_time_start, backup_time_end;
@@ -427,7 +462,7 @@ int main(int argc, char** argv){
                                         container_index, container_inner_offset, container_inner_index,
                                         chunk_length, file_offset, file_cache, (void*)&sha1_fp,
                                         Config::getInstance().getContainersPath().c_str());
-
+                    
                     // save chunk metadata
                     entry_value.container_number = container_index;
                     entry_value.offset = container_inner_offset;
@@ -539,7 +574,7 @@ int main(int argc, char** argv){
             if(Config::getInstance().getRestoreMethod() == CONTAINER_CACHE){
                 cc = new ContainerCache(Config::getInstance().getContainersPath().c_str(), 128);
             }else if(Config::getInstance().getRestoreMethod() == CHUNK_CACHE){
-                cc = new ChunkCache(Config::getInstance().getContainersPath().c_str(), 128);
+                cc = new ChunkCache(Config::getInstance().getContainersPath().c_str(), 16*1024);
             }
             
             for(auto &x : file_recipe){

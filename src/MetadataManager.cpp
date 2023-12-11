@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include <string.h>
 
+MetadataManager *GlobalMetadataManagerPtr;
+
 int MetadataManager::load(){
     printf("-----------------------Loading FP-index-----------------------\n");
     printf("Loading index..\n");
@@ -60,7 +62,7 @@ int MetadataManager::save(){
     close(fd);
 }
 
-LookupResult MetadataManager::dedupLookup(const SHA1FP &sha1){
+LookupResult MetadataManager::dedupLookup(SHA1FP sha1){
     auto dedupIter = this->fp_table_origin.find(sha1);
     if(dedupIter != this->fp_table_origin.end()){
         return Dedup;
@@ -74,7 +76,7 @@ LookupResult MetadataManager::dedupLookup(const SHA1FP &sha1){
     return Unique;
 }
 
-int MetadataManager::addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value){
+int MetadataManager::addNewEntry(SHA1FP sha1, ENTRY_VALUE value){
     auto dedupIter = this->fp_table_added.find(sha1);
     assert(dedupIter == this->fp_table_added.end());
     this->fp_table_added.emplace(sha1, value);

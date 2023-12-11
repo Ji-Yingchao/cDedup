@@ -8,6 +8,7 @@ using namespace std;
 enum TASK_TYPE{
     TASK_RESTORE,
     TASK_WRITE,
+    TASK_WRITE_PIPELINE,
     TASK_DELETE,
     NOT_CHOOSED
 };
@@ -192,6 +193,8 @@ class Config{
         enum TASK_TYPE taskTypeTrans(char* s){
             if(strcmp(s, "write") == 0){
                 return TASK_WRITE;
+            }else if (strcmp(s, "write_pipeline") == 0){
+                return TASK_WRITE_PIPELINE;
             }else if (strcmp(s, "restore") == 0){
                 return TASK_RESTORE;
             }else if (strcmp(s, "delete") == 0){
