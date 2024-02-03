@@ -1,6 +1,6 @@
 {
   "Task": "write",
-  "InputFile": "/home/cyf/dataSSD/linuxVersion2/linux-5.0.9.tar",
+  "InputFile": "/home/cyf/dataSSD/linuxVersion/linux-5.1.9.tar",
   "ChunkingMethod": "cdc",
   "Size": 4096,
   "Normal": 2,

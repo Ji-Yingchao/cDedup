@@ -688,6 +688,9 @@ int main(int argc, char** argv){
         printf("Restore Throughput %.2f MiB/s\n", restore_throughput);
 
     }else if(Config::getInstance().getTaskType() == TASK_DELETE){
+        struct timeval delete_time_start, delete_time_end;
+        gettimeofday(&delete_time_start, NULL);
+
         // 根据 json 文件中的 fileRecipesPath 和 RestoreVersion 选择要删除的文件
 
         if(!fileRecipeExist(Config::getInstance().getRestoreVersion(),
@@ -724,7 +727,10 @@ int main(int argc, char** argv){
 
         GlobalMetadataManagerPtr->save();
 
-
+        gettimeofday(&delete_time_end, NULL);
+        uint64_t single_delete_time_us = (delete_time_end.tv_sec - delete_time_start.tv_sec) * 1000000 + delete_time_end.tv_usec - delete_time_start.tv_usec;
+        printf("-----------------------Delete Statics----------------------\n");
+        printf("Delete time %d ms\n", single_delete_time_us/1000);
     }
 
     

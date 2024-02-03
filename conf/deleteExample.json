@@ -1,9 +1,7 @@
 {
-    "Task": "delete",
-    "RestoreVersion": 1,
-
-    "fingerprintsFilePath": "working/metadata/fingerprints.meta",
-    "fileRecipesPath": "working/metadata/FileRecipes",
-    "containersPath": "working/Containers"
+  "Task": "delete",
+  "RestoreVersion": 19,
+  "fingerprintsFilePath": "/home/cyf/dataSSD/working/metadata/fingerprints.meta",
+  "fileRecipesPath": "/home/cyf/dataSSD/working/metadata/FileRecipes",
+  "containersPath": "/home/cyf/dataSSD/working/Containers"
 }
-  

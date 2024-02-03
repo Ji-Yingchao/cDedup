@@ -39,7 +39,11 @@ int MetadataManager::save(){
     // if(0 == access(this->metadata_file_path.c_str(), F_OK))
     //     remove(this->metadata_file_path.c_str());
 
-    int fd = open(this->metadata_file_path.c_str(), O_WRONLY | O_CREAT);
+    int fd = open(this->metadata_file_path.c_str(), O_WRONLY | O_CREAT, 0777);
+    if(fd < 0){
+        perror("Saving fp index error, the reason is ");
+        exit(-1);
+    }
     lseek(fd, 0, SEEK_SET);
     ftruncate(fd,0);
 

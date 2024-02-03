@@ -1,4 +1,4 @@
-folder_path="/home/cyf/dataSSD/linuxVersion2/"
+folder_path="/home/cyf/dataSSD/linuxVersion/"
 files=$(ls $folder_path)
 for new_file_path in $files
 do
