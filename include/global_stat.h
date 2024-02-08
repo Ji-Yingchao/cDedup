@@ -6,7 +6,7 @@
 #include <unistd.h>
 using namespace std;
 
-// json好像不支持long long
+
 // 每次重删任务前请手动将json item置0
 class GlobalStat{
 public:
@@ -17,11 +17,8 @@ public:
 
     // getters
     int getTotalSize(){return this->total_size_kb;}
-    int getSizeBeforeCompression(){return this->size_before_compression_kb;}
-    int getSizeAfterCompression(){return this->size_after_compression_kb;}
+    int getDedupSize(){return this->dedup_size_kb;}
     double getDR(){return this->DR;}
-    double getCR(){return this->CR;}
-    double getDRR(){return this->DRR;}
 
     void parse_arguments(char * json_path)
     {
@@ -50,27 +47,16 @@ public:
             //1. User indicate configurations
             if (strcmp(item_name, "Size") == 0) {
                 GlobalStat::getInstance().setTotalSize(val_int);
-            } else if (strcmp(item_name, "SizeBeforeCompression") == 0) {
-                GlobalStat::getInstance().setSizeBeforeCompression(val_int);
-            } else if (strcmp(item_name, "SizeAfterCompression") == 0) {
-                GlobalStat::getInstance().setSizeAfterCompression(val_int);
             }else if (strcmp(item_name, "DeduplicationRatio") == 0) {
                 GlobalStat::getInstance().setDR(val_dol);
-            }else if (strcmp(item_name, "CompressionRatio") == 0) {
-                GlobalStat::getInstance().setCR(val_dol);
-            }else if (strcmp(item_name, "DataReductionRatio") == 0) {
-                GlobalStat::getInstance().setDRR(val_dol);
             }
         }
 
         //show
         printf("-------Parsing Old Global Arguments-------\n");
-        printf("Init Size %d\n", GlobalStat::getInstance().getTotalSize());
-        printf("Init Size Before Compression %d\n", GlobalStat::getInstance().getSizeBeforeCompression());
-        printf("Init Size After Compression %d\n", GlobalStat::getInstance().getSizeAfterCompression());
+        printf("Init Total Size %d\n", GlobalStat::getInstance().getTotalSize());
+        printf("Init Dedup Size %d\n", GlobalStat::getInstance().getDedupSize());
         printf("Init DR %.2f\n", GlobalStat::getInstance().getDR());
-        printf("Init CR %.2f\n", GlobalStat::getInstance().getCR());
-        printf("Init DRR %.2f\n", GlobalStat::getInstance().getDRR());
     }
 
     void save_arguments(char * json_path)
@@ -90,12 +76,9 @@ public:
         }
 
         cJSON *config = cJSON_Parse(source);
-        cJSON_ReplaceItemInObject(config, "Size", cJSON_CreateNumber((double)GlobalStat::getInstance().getTotalSize()));
-        cJSON_ReplaceItemInObject(config, "SizeBeforeCompression", cJSON_CreateNumber((double)GlobalStat::getInstance().getSizeBeforeCompression()));
-        cJSON_ReplaceItemInObject(config, "SizeAfterCompression", cJSON_CreateNumber((double)GlobalStat::getInstance().getSizeAfterCompression()));
+        cJSON_ReplaceItemInObject(config, "Total Size", cJSON_CreateNumber((double)GlobalStat::getInstance().getTotalSize()));
+        cJSON_ReplaceItemInObject(config, "Dedup Size", cJSON_CreateNumber((double)GlobalStat::getInstance().getDedupSize()));
         cJSON_ReplaceItemInObject(config, "DeduplicationRatio", cJSON_CreateNumber(GlobalStat::getInstance().getDR()));
-        cJSON_ReplaceItemInObject(config, "CompressionRatio", cJSON_CreateNumber(GlobalStat::getInstance().getCR()));
-        cJSON_ReplaceItemInObject(config, "DataReductionRatio", cJSON_CreateNumber(GlobalStat::getInstance().getDRR()));
         
         char *cjValue = cJSON_Print(config);
         ftruncate(fileno(fp), 0);
@@ -110,42 +93,30 @@ public:
 
         //show
         printf("-------Saving New Global Arguments-------\n");
-        printf("Size %d KiB\n", GlobalStat::getInstance().getTotalSize());
-        printf("Size Before Compression %d KiB\n", GlobalStat::getInstance().getSizeBeforeCompression());
-        printf("Size After Compression %d KiB\n", GlobalStat::getInstance().getSizeAfterCompression());
+        printf("Total Size %d KiB\n", GlobalStat::getInstance().getTotalSize());
+        printf("Dedup Size %d KiB\n", GlobalStat::getInstance().getDedupSize());
         printf("DR %.2f\n", GlobalStat::getInstance().getDR());
-        printf("CR %.2f\n", GlobalStat::getInstance().getCR());
-        printf("DRR %.2f\n", GlobalStat::getInstance().getDRR());
+
     }
 
-    void update_kb(int backup_size_kb, 
-                int backup_size_before_compression_kb,
-                int backup_size_after_compression_kb){
-        this->total_size_kb += backup_size_kb ;
-        this->size_before_compression_kb += backup_size_before_compression_kb;
-        this->size_after_compression_kb += backup_size_after_compression_kb;
-
-        this->DR = 1 - (double)this->size_before_compression_kb / (double)this->total_size_kb;
-        this->CR = 1 - (double)this->size_after_compression_kb / (double)this->size_before_compression_kb;
-        this->DRR = 1 - (double)this->size_after_compression_kb / (double)this->total_size_kb;
+    void update_kb(int backup_total_size_kb, int backup_dedup_size_kb){
+        this->total_size_kb += backup_total_size_kb ;
+        this->dedup_size_kb += backup_dedup_size_kb ;
+        this->DR = (double)this->dedup_size_kb / (double)this->total_size_kb;
     }
 
 private:
     // setters
     void setTotalSize(int n){this->total_size_kb = n;}
-    void setSizeBeforeCompression(int n){this->size_before_compression_kb = n;}
-    void setSizeAfterCompression(int n){this->size_after_compression_kb = n;}
+    void setDedupSize(int n){this->dedup_size_kb = n;}
     void setDR(double n){this->DR = n;}
-    void setCR(double n){this->CR = n;}
-    void setDRR(double n){this->DRR = n;}
 
     // 全局重删压缩信息
+    // json好像不支持long long，所以这里暂时用KiB
     int total_size_kb;
-    int size_before_compression_kb;
-    int size_after_compression_kb;
+    int dedup_size_kb;
     double DR;
-    double CR;
-    double DRR;
+
 };
 
 #endif

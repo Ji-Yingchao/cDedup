@@ -26,20 +26,15 @@ struct ENTRY_VALUE {
     uint32_t offset;
     uint16_t chunk_length;
     uint16_t container_inner_index;
-    uint32_t ref_cnt;
 };
 
-struct TupleHasher {
-    std::size_t operator()(const SHA1FP &key) const {
-        return key.fp1;
+struct Hasher {
+    uint32_t operator()(SHA1FP key) const {
+        return key.fp2;
     }
 };
 
-// bool operator == (const SHA1FP &lhs, const SHA1FP &rhs) {
-//         return lhs.fp1 == rhs.fp1 && lhs.fp2 == rhs.fp2 && lhs.fp3 == rhs.fp3 && lhs.fp4 == rhs.fp4;
-// }
-
-struct TupleEqualer {
+struct Equaler {
     bool operator()(const SHA1FP &lhs, const SHA1FP &rhs) const {
         return lhs.fp1 == rhs.fp1 && lhs.fp2 == rhs.fp2 && lhs.fp3 == rhs.fp3 && lhs.fp4 == rhs.fp4;
     }
@@ -51,19 +46,19 @@ class MetadataManager {
             this->metadata_file_path = file_path;
         }
 
-        int save();
-        int load();
-        LookupResult dedupLookup(SHA1FP sha1);
-        int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value);
+        void save();
+        void load();
+        LookupResult dedupLookup(SHA1FP *sha1);
+        void addNewEntry(const SHA1FP *sha1, const ENTRY_VALUE *value);
         int addRefCnt(const SHA1FP sha1);
         int decRefCnt(const SHA1FP sha1);
         int chunkOffsetDec(SHA1FP sha1, int oft, int len);
-        ENTRY_VALUE getEntry(const SHA1FP sha1);
+        ENTRY_VALUE getEntry(const SHA1FP *sha1);
 
     private:
         std::string metadata_file_path;
         // FP-index
-        std::unordered_map<SHA1FP, ENTRY_VALUE, TupleHasher, TupleEqualer> fp_table_origin;
-        std::unordered_map<SHA1FP, ENTRY_VALUE, TupleHasher, TupleEqualer> fp_table_added;
+        std::unordered_map<SHA1FP, ENTRY_VALUE, Hasher, Equaler> fp_table_origin;
+        std::unordered_map<SHA1FP, ENTRY_VALUE, Hasher, Equaler> fp_table_added;
 };
 #endif

@@ -98,9 +98,9 @@ void *dedup_thread(void *arg) {
 		jcr.data_size += c->size;
 
 		// lookup fingerprint
-		SHA1FP sha1_fp;
+        SHA1FP sha1_fp;
 		memcpy(&sha1_fp, c->fp, 20);
-        LookupResult lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp);
+        LookupResult lookup_result = GlobalMetadataManagerPtr->dedupLookup(&sha1_fp);
 
 		if(lookup_result == Unique){
 			jcr.unique_chunk_num += 1;
@@ -120,16 +120,15 @@ void *dedup_thread(void *arg) {
 			entry_value.offset = container_inner_offset;
 			entry_value.chunk_length = c->size;
 			entry_value.container_inner_index = container_inner_index;
-			entry_value.ref_cnt = 1;
-			GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value);
+			GlobalMetadataManagerPtr->addNewEntry(&sha1_fp, &entry_value);
 
 			// container buf pointer
 			container_inner_offset += c->size;
 			container_inner_index ++;
 			
 		}else if(lookup_result == Dedup){
-			GlobalMetadataManagerPtr->addRefCnt(sha1_fp);
-			
+			//GlobalMetadataManagerPtr->addRefCnt(sha1_fp);
+			;
 		}else{
 			;
 		}

@@ -6,7 +6,7 @@
 static pthread_t chunk_t;
 static int64_t chunk_num;
 
-static int (*chunking)(unsigned char* buf, int size);
+static ssize_t (*chunking)(unsigned char* buf, int size);
 extern SyncQueue* read_queue;
 extern SyncQueue* chunk_queue;
 

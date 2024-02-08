@@ -191,7 +191,7 @@ void fastCDC_init(int fas, int NC_level) {
     MinSize_divide_by_2 = MinSize / 2;
 }
 
-int FastCDC_with_NC(unsigned char *p, int n) {
+ssize_t FastCDC_with_NC(unsigned char *p, int n) {
     uint64_t fingerprint = 0;
     int i = MinSize;
 
@@ -231,7 +231,7 @@ int FastCDC_with_NC(unsigned char *p, int n) {
     Come from GearCDC, deploy Optimized Hash Judgement and Cut Point Skipping
     The normalized chunking level is 0
 */
-int FastCDC_without_NC(unsigned char *p, int n) {
+ssize_t FastCDC_without_NC(unsigned char *p, int n) {
     uint64_t fingerprint = 0, digest;
     int i = MinSize;
     if (n <= MinSize)  
@@ -248,25 +248,25 @@ int FastCDC_without_NC(unsigned char *p, int n) {
 }
 
 // FSC
-int FSC_512(unsigned char *p, int n) {
+ssize_t FSC_512(unsigned char *p, int n) {
     if(n>=512)
         return 512;
     return n;
 }
 
-int FSC_4(unsigned char *p, int n) {
+ssize_t FSC_4(unsigned char *p, int n) {
     if(n>=4096)
         return 4*1024;
     return n;
 }
 
-int FSC_8(unsigned char *p, int n) {
+ssize_t FSC_8(unsigned char *p, int n) {
     if(n>=8192)
         return 8*1024;
     return n;
 }
 
-int FSC_16(unsigned char *p, int n) {
+ssize_t FSC_16(unsigned char *p, int n) {
     if(n>=16384)
         return 16*1024;
     return n;

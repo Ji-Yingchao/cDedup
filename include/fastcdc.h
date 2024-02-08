@@ -13,15 +13,15 @@
 void fastCDC_init(int fastcdc_avg_size, int NC_level);
 
 // origin fastcdc function
-int FastCDC_without_NC(unsigned char *p, int n);
+ssize_t FastCDC_without_NC(unsigned char *p, int n);
 
 // normalized fastcdc
-int FastCDC_with_NC(unsigned char *p, int n);
+ssize_t FastCDC_with_NC(unsigned char *p, int n);
 
 // FSC
-int FSC_512(unsigned char *p, int n);
-int FSC_4(unsigned char *p, int n);
-int FSC_8(unsigned char *p, int n);
-int FSC_16(unsigned char *p, int n);
+ssize_t FSC_512(unsigned char *p, int n);
+ssize_t FSC_4(unsigned char *p, int n);
+ssize_t FSC_8(unsigned char *p, int n);
+ssize_t FSC_16(unsigned char *p, int n);
 
 #endif

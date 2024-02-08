@@ -7,9 +7,9 @@ SRC = main.cpp ./src/fastcdc.cpp ./src/full_file_deduplicater.cpp ./src/merkle_t
 	  ./src/pipeline.cpp ./src/pipeline_read.cpp ./src/pipeline_chunk.cpp ./src/pipeline_hash.cpp ./src/pipeline_dedup.cpp \
 	  ./src/sync_queue.cpp ./src/queue.cpp ./src/jcr.cpp 
 EXE_NAME = cDedup
-
+GFLGA = -g -Wall -O3
 amazing:
-	$(CC)  $(SRC) $(LIB) -o $(EXE_NAME) -g -O0 -I./include -I./utils -I./utils/lz4-1.9.1/lib -L./utils/lz4-1.9.1/lib
+	$(CC)  $(SRC) $(LIB) -o $(EXE_NAME) $(GFLGA)  -I./include -I./utils -I./utils/lz4-1.9.1/lib -L./utils/lz4-1.9.1/lib
 
 clean:
 	rm $(EXE_NAME) \

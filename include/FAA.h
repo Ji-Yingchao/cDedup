@@ -31,6 +31,6 @@ void FAA::loadContainer(int CID, std::string containers_path, unsigned char* con
     int fd = open(container_name.data(), O_RDONLY);
 
     memset(container_read_buffer, 0, CONTAINER_SIZE);
-    int n = read(fd, container_read_buffer, CONTAINER_SIZE); // 可能塞不满
+    read(fd, container_read_buffer, CONTAINER_SIZE); // 可能塞不满
     close(fd);
 }
