@@ -30,7 +30,7 @@ struct ENTRY_VALUE {
 
 struct Hasher {
     uint32_t operator()(SHA1FP key) const {
-        return key.fp2;
+        return key.fp1;
     }
 };
 
@@ -47,6 +47,7 @@ class MetadataManager {
         }
 
         void save();
+        void saveBatch();
         void load();
         LookupResult dedupLookup(SHA1FP *sha1);
         void addNewEntry(const SHA1FP *sha1, const ENTRY_VALUE *value);

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-json_file="/home/cyf/cDedup/global_stat.json"
+json_file="/home/cyf/cDedup/global_status.json"
 
 # Check if jq is installed
 if ! command -v jq > /dev/null; then
@@ -10,5 +10,7 @@ fi
 
 # Set all numeric values to zero using jq
 jq 'walk(if type == "number" then 0 else . end)' "$json_file" > "${json_file%.json}_zeroed.json"
+mv "${json_file%.json}_zeroed.json" "$json_file"
 
+jq 'walk(if type == "string" then "0" else . end)' "$json_file" > "${json_file%.json}_zeroed.json"
 mv "${json_file%.json}_zeroed.json" "$json_file"

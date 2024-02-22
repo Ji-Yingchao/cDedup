@@ -14,7 +14,7 @@ enum TASK_TYPE{
 };
 
 enum CHUNKING_METHOD{
-    CDC,
+    FastCDC,
     FSC,
     FULL_FILE
 };
@@ -125,39 +125,20 @@ class Config{
                     Config::getInstance().setRestoreId(val_int);
                 } else if (strcmp(name, "DeleteId") == 0) {
                     Config::getInstance().setDeleteId(val_int);
-                }else if (strcmp(name, "Size") == 0) {
+                }else if (strcmp(name, "ChunkSize") == 0) {
                     Config::getInstance().setSize(val_int);
-                }else if (strcmp(name, "Normal") == 0) {
+                }else if (strcmp(name, "NC-level") == 0) {
                     Config::getInstance().setNormal(val_int);
-                }else if (strcmp(name, "MerkleTree") == 0) {
-                    Config::getInstance().setMerkleTree(valuestring);
                 }else if (strcmp(name, "RestoreMethod") == 0) {
                     Config::getInstance().setRestoreMethod(valuestring);
                 }
                 //2. metadata configurations
-                else if (strcmp(name, "fingerprintsFilePath") == 0) {
+                else if (strcmp(name, "FingerprintsIndexPath") == 0) {
                     Config::getInstance().setFingerprintsFilePath(valuestring);
-                } else if (strcmp(name, "fileRecipesPath") == 0) {
+                } else if (strcmp(name, "FileRecipesFolder") == 0) {
                     Config::getInstance().setFileRecipesPath(valuestring);
-                } else if (strcmp(name, "containersPath") == 0) {
+                } else if (strcmp(name, "ContainerPoolPath") == 0) {
                     Config::getInstance().setContainersPath(valuestring);
-                } else if (strcmp(name, "fullFileFingerprintsPath") == 0) {
-                    Config::getInstance().setFullFileFingerprintsPath(valuestring);
-                } else if (strcmp(name, "fullFileStoragePath") == 0) {
-                    Config::getInstance().setFullFileStoragePath(valuestring);
-                }
-                else if (strcmp(name, "MTL1") == 0) {
-                    Config::getInstance().setMTL1(valuestring);
-                }else if (strcmp(name, "MTL2") == 0) {
-                    Config::getInstance().setMTL2(valuestring);
-                }else if (strcmp(name, "MTL3") == 0) {
-                    Config::getInstance().setMTL3(valuestring);
-                }else if (strcmp(name, "MTL4") == 0) {
-                    Config::getInstance().setMTL4(valuestring);
-                }else if (strcmp(name, "MTL5") == 0) {
-                    Config::getInstance().setMTL5(valuestring);
-                }else if (strcmp(name, "MTL6") == 0) {
-                    Config::getInstance().setMTL6(valuestring);
                 }
             }
         }
@@ -206,8 +187,8 @@ class Config{
         }
 
         enum CHUNKING_METHOD cmTypeTrans(char* s){
-            if(strcmp(s, "cdc") == 0){
-                return CDC;
+            if(strcmp(s, "FastCDC") == 0){
+                return FastCDC;
             }else if (strcmp(s, "fsc") == 0){
                 return FSC;
             }else if (strcmp(s, "file") == 0){

@@ -1,22 +1,12 @@
 #!/bin/bash
 # 这里的配置需要和参数json一致
-rm -fr /home/cyf/dataSSD/working/
+rm -fr /home/cyf/hikvision/ssd1/working/
 
-mkdir /home/cyf/dataSSD/working/
-mkdir /home/cyf/dataSSD/working/restoreFolder
-mkdir /home/cyf/dataSSD/working/Containers
-mkdir /home/cyf/dataSSD/working/FULL_FILE_STORAGE
-mkdir /home/cyf/dataSSD/working/metadata
-mkdir /home/cyf/dataSSD/working/metadata/FileRecipes
+mkdir /home/cyf/hikvision/ssd1/working/
+mkdir /home/cyf/hikvision/ssd1/working/metadata
+mkdir /home/cyf/hikvision/ssd1/working/metadata/FileRecipesFolder
+touch /home/cyf/hikvision/ssd1/working/metadata/FingerprintsIndex
+touch /home/cyf/hikvision/ssd1/working/ContainerPool
 
-touch /home/cyf/dataSSD/working/metadata/fingerprints.meta
-touch /home/cyf/dataSSD/working/metadata/FFFP.meta
-touch /home/cyf/dataSSD/working/metadata/L1.meta
-touch /home/cyf/dataSSD/working/metadata/L2.meta
-touch /home/cyf/dataSSD/working/metadata/L3.meta
-touch /home/cyf/dataSSD/working/metadata/L4.meta
-touch /home/cyf/dataSSD/working/metadata/L5.meta
-touch /home/cyf/dataSSD/working/metadata/L6.meta
-
-source ./scripts/clear_global_stat.sh
+source ./scripts/clear_global_status.sh
 

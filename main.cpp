@@ -31,9 +31,10 @@
 #define MB (1024*1024)
 
 uint32_t rev_container_cnt = 0;
+long long write_containers_num = 0;
 unsigned char rev_container_buf[CONTAINER_SIZE]={0};
 unsigned char tmp_buf[CONTAINER_SIZE]={0};
-char* global_stat_path = "/home/cyf/cDedup/global_stat.json";
+char* global_stat_path = "/home/cyf/cDedup/global_status.json";
 extern MetadataManager *GlobalMetadataManagerPtr;
 
 ssize_t (*chunking) (unsigned char*p, int n);
@@ -66,6 +67,21 @@ void saveFileRecipe(std::vector<std::string> file_recipe, const char* fileRecipe
         if(write(fd, x.data(), SHA_DIGEST_LENGTH) < 0)
             printf("save recipe write error\n");
     }
+    close(fd);
+}
+
+void saveFileRecipeBatch(const uint8_t* file_recipe_cache, int fp_num, const char* fileRecipesPath, int version){
+    std::string recipe_name(fileRecipesPath);
+    recipe_name.append("/recipe");
+    recipe_name.append(std::to_string(version));
+    int fd = open(recipe_name.data(), O_RDWR | O_CREAT, 0777);
+    if(fd < 0){ 
+        printf("saveFileRecipe open error, id %d, %s\n", errno, strerror(errno)); 
+        exit(-1);
+    }
+    
+    write(fd, file_recipe_cache, fp_num*SHA_DIGEST_LENGTH);
+
     close(fd);
 }
 
@@ -113,19 +129,16 @@ std::vector<std::string> getFileRecipe(uint8_t restore_version, const char* file
     return ans;
 }
 
-void saveContainer(int container_index, unsigned char* container_buf, unsigned int len, const char* containersPath){
-    std::string container_name(containersPath);
-    container_name.append("/container");
-    container_name.append(std::to_string(container_index));
-    
-    int fd = open(container_name.data(), O_RDWR | O_CREAT, 0777);
-    
-    if(write(fd, container_buf, len) != len){
-        printf("saveContainer write error, id %d, %s\n", errno, strerror(errno));
-        exit(-1);
-    }
+void writeContainer(unsigned char* container_buf, unsigned int len, const char* container_pool_path, int container_index){
+    FILE* file = fopen(container_pool_path, "a");
+    fseek(file, container_index * CONTAINER_SIZE, SEEK_SET);
 
-    close(fd);
+    if(fwrite(container_buf, CONTAINER_SIZE, 1, file) != 1){
+        perror("Fail to append a container in ContainerPool.");
+        exit(1);
+	}
+
+    fclose(file);
 }
 
 void saveChunkToContainer(unsigned int& container_buf_pointer, unsigned char* container_buf, 
@@ -135,12 +148,13 @@ void saveChunkToContainer(unsigned int& container_buf_pointer, unsigned char* co
                           const char* containers_path){
     // flush
     if(container_buf_pointer + chunk_length >= CONTAINER_SIZE){
-        saveContainer(container_index, container_buf, container_buf_pointer, containers_path);
+        writeContainer(container_buf, container_buf_pointer, containers_path, container_index);
         memset(container_buf, 0, CONTAINER_SIZE);
         container_index++;
         container_inner_offset = 0;
         container_buf_pointer = 0;
         container_inner_index = 0;
+        write_containers_num++;
     }
 
     // container buffer
@@ -225,7 +239,7 @@ int main(int argc, char** argv){
     GlobalStat::getInstance().parse_arguments(global_stat_path);
     
     // chunking method
-    if(Config::getInstance().getChunkingMethod() == CDC){
+    if(Config::getInstance().getChunkingMethod() == FastCDC){
         int NC_level = Config::getInstance().getNormalLevel();
         int avg_size = Config::getInstance().getAvgChunkSize();
         fastCDC_init(avg_size, NC_level);
@@ -305,10 +319,13 @@ int main(int argc, char** argv){
 
         struct SHA1FP *sha1_fp = (struct SHA1FP *)malloc(sizeof(SHA1FP));
         struct ENTRY_VALUE *entry_value = (struct ENTRY_VALUE *)malloc(sizeof(ENTRY_VALUE));
+        
         std::vector<std::string> file_recipe; // 保存这个文件所有块的指纹
+        uint8_t* file_recipe_cache = (uint8_t*)malloc(128*MB);
+        int file_recipe_cache_off = 0;
 
         // metadata entry(except FP)
-        uint32_t container_index = getFilesNum(Config::getInstance().getContainersPath().c_str());
+        uint32_t container_index = GlobalStat::getInstance().getContainersNum();
         uint32_t container_inner_offset = 0;
         uint32_t chunk_length = 0;
         uint16_t container_inner_index = 0;
@@ -325,6 +342,7 @@ int main(int argc, char** argv){
         long long sum_chunks = 0;
         long long sum_size = 0;
         long long dedup_size = 0;
+        
         
         // synchronous main loop
         while(1){
@@ -348,7 +366,9 @@ int main(int argc, char** argv){
                 LookupResult lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp);
 
                 // Insert fingerprint into file recipe
-                file_recipe.push_back(std::string((char*)sha1_fp, sizeof(struct SHA1FP)));
+                //file_recipe.push_back(std::string((char*)sha1_fp, sizeof(struct SHA1FP)));
+                memcpy(file_recipe_cache+file_recipe_cache_off, sha1_fp, 20);
+                file_recipe_cache_off+=20;
 
                 // Statistic
                 sum_chunks ++;
@@ -383,9 +403,12 @@ int main(int argc, char** argv){
         }
      
         // flushing the last container
-        if(container_buf_pointer > 0)
-            saveContainer(container_index, container_buf, 
-                          container_buf_pointer, Config::getInstance().getContainersPath().c_str());
+        if(container_buf_pointer > 0){
+            writeContainer(container_buf, 
+                          container_buf_pointer, Config::getInstance().getContainersPath().c_str(), container_index);
+            write_containers_num++;
+        }
+            
         // Backup Throughput
         gettimeofday(&backup_time_end, NULL);
         uint64_t single_dedup_time_us = (backup_time_end.tv_sec - backup_time_start.tv_sec) * 1000000 + backup_time_end.tv_usec - backup_time_start.tv_usec;
@@ -405,13 +428,14 @@ int main(int argc, char** argv){
         close(idf);
 
         // save file_recipe
-        saveFileRecipe(file_recipe, Config::getInstance().getFileRecipesPath().c_str(), current_version);
+        saveFileRecipeBatch(file_recipe_cache, sum_chunks, Config::getInstance().getFileRecipesPath().c_str(), current_version);
 
         // save metadata entry
-        GlobalMetadataManagerPtr->save();
+        GlobalMetadataManagerPtr->saveBatch();
         
         // updating and saving statistic
-        GlobalStat::getInstance().update_kb(sum_size/1024, dedup_size/1024);
+        GlobalStat::getInstance().update_by_backup_job(sum_size, sum_size - dedup_size, 
+                                sum_chunks, sum_chunks-dedup_chunks, write_containers_num);
         GlobalStat::getInstance().save_arguments(global_stat_path);
 
     }else if(Config::getInstance().getTaskType() == TASK_RESTORE){

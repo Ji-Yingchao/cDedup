@@ -44,13 +44,38 @@ void MetadataManager::save(){
         exit(-1);
     }
 
-    int count = 0;
     for(auto item : this->fp_table_added){
         write(fd, &item.first, sizeof(SHA1FP));
         write(fd, &item.second, sizeof(ENTRY_VALUE));
-        count++;
     }
-    printf("New added item %d\n", count);
+
+    printf("New added item %d\n", fp_table_added.size());
+
+    close(fd);
+}
+
+void MetadataManager::saveBatch(){
+    printf("-----------------------Saving FP-index batch-----------------------\n");
+    printf("Saving index..\n");
+   
+    // Appending new fingerprints and entry value to FP-index;
+    int fd = open(this->metadata_file_path.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0777);
+    if(fd < 0){
+        perror("Saving fp index error, the reason is ");
+        exit(-1);
+    }
+
+    uint8_t* write_buf = (uint8_t*)malloc(128*MB);
+    int off = 0;
+    for(auto item : this->fp_table_added){
+        memcpy(write_buf+off, &item.first, sizeof(SHA1FP));
+        memcpy(write_buf+off+sizeof(SHA1FP), &item.second, sizeof(ENTRY_VALUE));
+        off+=sizeof(SHA1FP);
+        off+=sizeof(ENTRY_VALUE);
+    }
+
+    write(fd, write_buf, fp_table_added.size()*(sizeof(SHA1FP)+sizeof(ENTRY_VALUE)));
+    printf("New added item %d\n", fp_table_added.size());
 
     close(fd);
 }

@@ -1,11 +1,10 @@
 {
   "Task": "write",
-  "InputFile": "/home/cyf/dataSSD/linuxVersion/linux-5.1.9.tar",
-  "ChunkingMethod": "cdc",
-  "Size": 4096,
-  "Normal": 2,
-  "MerkleTree": "no",
-  "containersPath": "/home/cyf/dataSSD/working/Containers",
-  "fileRecipesPath": "/home/cyf/dataSSD/working/metadata/FileRecipes",
-  "fingerprintsFilePath": "/home/cyf/dataSSD/working/metadata/fingerprints.meta"
+  "InputFile": "/home/cyf/hikvision/ssd2/v6.8-rc2.tar",
+  "ChunkingMethod": "FastCDC",
+  "ChunkSize": 4096,
+  "NC-level": 2,
+  "ContainerPoolPath": "/home/cyf/hikvision/ssd1/working/ContainerPool",
+  "FingerprintsIndexPath": "/home/cyf/hikvision/ssd1/working/metadata/FingerprintsIndex",
+  "FileRecipesFolder": "/home/cyf/hikvision/ssd1/working/metadata/FileRecipesFolder"
 }

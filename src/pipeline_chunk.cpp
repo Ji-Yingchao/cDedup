@@ -90,7 +90,7 @@ void chunking_method_prepare(){
             exit(-1);
         }
 
-	}else if(Config::getInstance().getChunkingMethod() == CDC){
+	}else if(Config::getInstance().getChunkingMethod() == FastCDC){
 		printf("Deploying FastCDC chunking method\n");
 		chunking = FastCDC_with_NC;
         fastCDC_init(Config::getInstance().getAvgChunkSize(), Config::getInstance().getNormalLevel());
