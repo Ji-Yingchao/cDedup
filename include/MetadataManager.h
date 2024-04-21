@@ -54,7 +54,7 @@ class MetadataManager {
         int save();
         int load();
         LookupResult dedupLookup(SHA1FP sha1);
-        int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value);
+                int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value);
         int addRefCnt(const SHA1FP sha1);
         int decRefCnt(const SHA1FP sha1);
         int chunkOffsetDec(SHA1FP sha1, int oft, int len);
@@ -65,5 +65,5 @@ class MetadataManager {
         // FP-index
         std::unordered_map<SHA1FP, ENTRY_VALUE, TupleHasher, TupleEqualer> fp_table_origin;
         std::unordered_map<SHA1FP, ENTRY_VALUE, TupleHasher, TupleEqualer> fp_table_added;
-};
+        };
 #endif

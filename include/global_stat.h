@@ -16,12 +16,9 @@ public:
     }
 
     // getters
-    int getTotalSize(){return this->total_size_kb;}
-    int getSizeBeforeCompression(){return this->size_before_compression_kb;}
-    int getSizeAfterCompression(){return this->size_after_compression_kb;}
+    uint64_t getLogicalSize(){return this->logical_size;}
+    uint64_t getPhysicalSize(){return this->physical_size;}
     double getDR(){return this->DR;}
-    double getCR(){return this->CR;}
-    double getDRR(){return this->DRR;}
 
     void parse_arguments(char * json_path)
     {
@@ -44,33 +41,24 @@ public:
         for (cJSON *param = config->child; param != nullptr; param = param->next) {
             char *item_name = param->string;
 
-            int val_int = param->valueint;
+            char* val_string = param->valuestring;
             double val_dol = param->valuedouble;
 
             //1. User indicate configurations
-            if (strcmp(item_name, "Size") == 0) {
-                GlobalStat::getInstance().setTotalSize(val_int);
-            } else if (strcmp(item_name, "SizeBeforeCompression") == 0) {
-                GlobalStat::getInstance().setSizeBeforeCompression(val_int);
-            } else if (strcmp(item_name, "SizeAfterCompression") == 0) {
-                GlobalStat::getInstance().setSizeAfterCompression(val_int);
-            }else if (strcmp(item_name, "DeduplicationRatio") == 0) {
+            if (strcmp(item_name, "LogicalSize") == 0) {
+                GlobalStat::getInstance().setLogicalSize(val_string);
+            } else if (strcmp(item_name, "PhysicalSize") == 0) {
+                GlobalStat::getInstance().setPhysicalSize(val_string);
+            } else if (strcmp(item_name, "DeduplicationRatio") == 0) {
                 GlobalStat::getInstance().setDR(val_dol);
-            }else if (strcmp(item_name, "CompressionRatio") == 0) {
-                GlobalStat::getInstance().setCR(val_dol);
-            }else if (strcmp(item_name, "DataReductionRatio") == 0) {
-                GlobalStat::getInstance().setDRR(val_dol);
             }
         }
 
         //show
         printf("-------Parsing Old Global Arguments-------\n");
-        printf("Init Size %d\n", GlobalStat::getInstance().getTotalSize());
-        printf("Init Size Before Compression %d\n", GlobalStat::getInstance().getSizeBeforeCompression());
-        printf("Init Size After Compression %d\n", GlobalStat::getInstance().getSizeAfterCompression());
+        printf("Init Logical Size %" PRIu64 "\n", GlobalStat::getInstance().getLogicalSize());
+        printf("Init Physical Size %" PRIu64 "\n", GlobalStat::getInstance().getPhysicalSize());
         printf("Init DR %.2f\n", GlobalStat::getInstance().getDR());
-        printf("Init CR %.2f\n", GlobalStat::getInstance().getCR());
-        printf("Init DRR %.2f\n", GlobalStat::getInstance().getDRR());
     }
 
     void save_arguments(char * json_path)
@@ -90,12 +78,11 @@ public:
         }
 
         cJSON *config = cJSON_Parse(source);
-        cJSON_ReplaceItemInObject(config, "Size", cJSON_CreateNumber((double)GlobalStat::getInstance().getTotalSize()));
-        cJSON_ReplaceItemInObject(config, "SizeBeforeCompression", cJSON_CreateNumber((double)GlobalStat::getInstance().getSizeBeforeCompression()));
-        cJSON_ReplaceItemInObject(config, "SizeAfterCompression", cJSON_CreateNumber((double)GlobalStat::getInstance().getSizeAfterCompression()));
+        string ls = to_string(GlobalStat::getInstance().getLogicalSize());
+        string ps = to_string(GlobalStat::getInstance().getPhysicalSize());
+        cJSON_ReplaceItemInObject(config, "LogicalSize", cJSON_CreateString(ls.c_str()));
+        cJSON_ReplaceItemInObject(config, "PhysicalSize", cJSON_CreateString(ps.c_str()));
         cJSON_ReplaceItemInObject(config, "DeduplicationRatio", cJSON_CreateNumber(GlobalStat::getInstance().getDR()));
-        cJSON_ReplaceItemInObject(config, "CompressionRatio", cJSON_CreateNumber(GlobalStat::getInstance().getCR()));
-        cJSON_ReplaceItemInObject(config, "DataReductionRatio", cJSON_CreateNumber(GlobalStat::getInstance().getDRR()));
         
         char *cjValue = cJSON_Print(config);
         ftruncate(fileno(fp), 0);
@@ -110,42 +97,28 @@ public:
 
         //show
         printf("-------Saving New Global Arguments-------\n");
-        printf("Size %d KiB\n", GlobalStat::getInstance().getTotalSize());
-        printf("Size Before Compression %d KiB\n", GlobalStat::getInstance().getSizeBeforeCompression());
-        printf("Size After Compression %d KiB\n", GlobalStat::getInstance().getSizeAfterCompression());
+        printf("Logical Size % " PRIu64 "\n", GlobalStat::getInstance().getLogicalSize());
+        printf("Physical Size %" PRIu64 "\n", GlobalStat::getInstance().getPhysicalSize());
         printf("DR %.2f\n", GlobalStat::getInstance().getDR());
-        printf("CR %.2f\n", GlobalStat::getInstance().getCR());
-        printf("DRR %.2f\n", GlobalStat::getInstance().getDRR());
     }
 
-    void update_kb(int backup_size_kb, 
-                int backup_size_before_compression_kb,
-                int backup_size_after_compression_kb){
-        this->total_size_kb += backup_size_kb ;
-        this->size_before_compression_kb += backup_size_before_compression_kb;
-        this->size_after_compression_kb += backup_size_after_compression_kb;
+    void update(uint64_t backup_logical_size, uint64_t backup_physical_size){
+        this->logical_size += backup_logical_size;
+        this->physical_size += backup_physical_size;
 
-        this->DR = 1 - (double)this->size_before_compression_kb / (double)this->total_size_kb;
-        this->CR = 1 - (double)this->size_after_compression_kb / (double)this->size_before_compression_kb;
-        this->DRR = 1 - (double)this->size_after_compression_kb / (double)this->total_size_kb;
+        this->DR = 1 - (double)this->physical_size / (double)this->logical_size;
     }
 
 private:
     // setters
-    void setTotalSize(int n){this->total_size_kb = n;}
-    void setSizeBeforeCompression(int n){this->size_before_compression_kb = n;}
-    void setSizeAfterCompression(int n){this->size_after_compression_kb = n;}
+    void setLogicalSize(string n){this->logical_size = std::stoull(n);}
+    void setPhysicalSize(string n){this->physical_size = std::stoull(n);}
     void setDR(double n){this->DR = n;}
-    void setCR(double n){this->CR = n;}
-    void setDRR(double n){this->DRR = n;}
 
     // 全局重删压缩信息
-    int total_size_kb;
-    int size_before_compression_kb;
-    int size_after_compression_kb;
+    uint64_t logical_size;
+    uint64_t physical_size;
     double DR;
-    double CR;
-    double DRR;
 };
 
 #endif

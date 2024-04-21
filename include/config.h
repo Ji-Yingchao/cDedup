@@ -9,6 +9,7 @@ enum TASK_TYPE{
     TASK_RESTORE,
     TASK_WRITE,
     TASK_WRITE_PIPELINE,
+    TASK_WRITE_FOLDER,
     TASK_DELETE,
     NOT_CHOOSED
 };
@@ -86,6 +87,10 @@ class Config{
         void setMTL5(char* s){this->MTL5 = s;}
         void setMTL6(char* s){this->MTL6 = s;}
 
+        void setPiling(char* s){this->piling = yesNoTrans(s);}
+        void setPilingNum(int n){this->piling_num = n;};
+        void setChainNum(int n){this->chain_num = n;};
+
         // you know
         void parse_argument(int argc, char **argv)
         {
@@ -159,6 +164,14 @@ class Config{
                 }else if (strcmp(name, "MTL6") == 0) {
                     Config::getInstance().setMTL6(valuestring);
                 }
+
+                else if (strcmp(name, "piling") == 0) {
+                    Config::getInstance().setPiling(valuestring);
+                }else if (strcmp(name, "piling_num") == 0) {
+                    Config::getInstance().setPilingNum(val_int);
+                }else if (strcmp(name, "chain_num") == 0) {
+                    Config::getInstance().setChainNum(val_int);
+                }
             }
         }
 
@@ -184,6 +197,11 @@ class Config{
         string full_file_storage_path;
         string MTL1, MTL2, MTL3, MTL4, MTL5, MTL6;
 
+        //打桩重删参数
+        bool piling;
+        int piling_num;
+        int chain_num;
+
         Config() {
             avg_chunk_size = 4096;
             normal_level = 2;
@@ -195,6 +213,8 @@ class Config{
                 return TASK_WRITE;
             }else if (strcmp(s, "write_pipeline") == 0){
                 return TASK_WRITE_PIPELINE;
+            }else if (strcmp(s, "write_folder") == 0){
+                return TASK_WRITE_FOLDER;
             }else if (strcmp(s, "restore") == 0){
                 return TASK_RESTORE;
             }else if (strcmp(s, "delete") == 0){

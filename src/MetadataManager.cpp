@@ -36,9 +36,6 @@ int MetadataManager::save(){
     printf("-----------------------Saving FP-index-----------------------\n");
     printf("Saving index..\n");
 
-    // if(0 == access(this->metadata_file_path.c_str(), F_OK))
-    //     remove(this->metadata_file_path.c_str());
-
     int fd = open(this->metadata_file_path.c_str(), O_WRONLY | O_CREAT, 0777);
     if(fd < 0){
         perror("Saving fp index error, the reason is ");
