@@ -305,12 +305,13 @@ void writeFile(string path){
     uint64_t hash_collision_sum = 0;
 
     // 打桩重删
+    bool isPiling = Config::getInstance().isPiling();
     uint32_t current_version = getFilesNum(Config::getInstance().getFileRecipesPath().c_str());
     uint32_t piling_num = Config::getInstance().getPilingNum();
-    uint32_t chain_num = Config::getInstance().getChainNum();
-    uint32_t min_destination_piling = current_version -  current_version % (piling_num + chain_num);
+    uint32_t chain_size = Config::getInstance().getChainNum();
+    uint32_t min_destination_piling = current_version -  current_version % (piling_num + chain_size);
     uint32_t max_destination_piling = min_destination_piling + piling_num - 1;
-    bool in_chain = (current_version % (piling_num + chain_num)) > (piling_num-1);
+    bool in_chain = (current_version % (piling_num + chain_size)) > (piling_num-1);
     
     // 普通分块重删，来一个块查寻一次，然后把non-duplicate chunk保存到container去
     for(;;){
@@ -332,7 +333,11 @@ void writeFile(string path){
 
             // Dedup
             LookupResult lookup_result;
-            lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp);
+            
+            if(isPiling)
+                lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp, in_chain); 
+            else
+                lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp);
 
             // 
             if(lookup_result == Unique){
@@ -349,7 +354,12 @@ void writeFile(string path){
                 entry_value.container_inner_index = container_inner_index;
                 entry_value.version = current_version;
                 entry_value.ref_cnt = 1;
-                GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value);
+
+                if(isPiling){
+                    GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value, in_chain);
+                }else{
+                    GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value);
+                }
 
                 // rev
                 container_inner_offset += chunk_length;
@@ -358,7 +368,7 @@ void writeFile(string path){
                 rev_container_cnt ++;
 
             }else if(lookup_result == Dedup){
-                GlobalMetadataManagerPtr->addRefCnt(sha1_fp);
+                //GlobalMetadataManagerPtr->addRefCnt(sha1_fp);
                 // 重删统计
                 dedup_chunks ++;
                 dedup_size += chunk_length;
@@ -388,7 +398,7 @@ void writeFile(string path){
     // printf("Sum chunks %" PRIu64 "\n",    sum_chunks);
     // printf("Sum size %" PRIu64 "\n",    sum_size);
     // printf("Unique chunks %" PRIu64 "\n",    sum_chunks - dedup_chunks);
-    printf("Dedup Ratio %.2f%\n",     double(dedup_size) / double(sum_size) *100);
+    printf("%.2f%\n",     double(dedup_size) / double(sum_size) *100);
 
     // update backup job
     bj.dedup_chunks += dedup_chunks;
@@ -397,6 +407,9 @@ void writeFile(string path){
     bj.sum_size += sum_size;
     bj.hash_collision_sum += hash_collision_sum;
     bj.file_num++;
+
+    if(isPiling)
+        GlobalMetadataManagerPtr->save(current_version, chain_size, min_destination_piling);
 
     // free 
     close(idf);
@@ -453,6 +466,7 @@ int main(int argc, char** argv){
     
     GlobalMetadataManagerPtr = new MetadataManager(Config::getInstance().getFingerprintsFilePath().c_str());
     
+    // 不支持普通重删和打桩混着写入
     if(Config::getInstance().getTaskType() == TASK_WRITE){
         int current_version = getFilesNum(Config::getInstance().getFileRecipesPath().c_str());
         if(current_version != 0){
@@ -499,7 +513,7 @@ int main(int argc, char** argv){
         // 保存全局信息
         GlobalStat::getInstance().update(bj.sum_size, bj.sum_size - bj.dedup_size);
         GlobalStat::getInstance().save_arguments(global_stat_path);
-
+        
         // save metadata entry
         GlobalMetadataManagerPtr->save();
 

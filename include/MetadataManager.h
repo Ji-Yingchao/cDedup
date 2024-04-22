@@ -50,11 +50,12 @@ class MetadataManager {
 
         int save();
         int load();
-        int save(int, int, int, int, int);
-        int load(uint32_t, uint32_t);
+        //暂不支持中断打桩写入，只支持目录批量一次性写入，所以没有对应的load函数
+        int save(int, int, int);
         LookupResult dedupLookup(SHA1FP sha1);
-        LookupResult dedupLookup(SHA1FP sha1, uint32_t, uint32_t, uint32_t);
+        LookupResult dedupLookup(SHA1FP sha1, bool);
         int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value);
+        int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value, bool);
         int addRefCnt(const SHA1FP sha1);
         int decRefCnt(const SHA1FP sha1);
         int chunkOffsetDec(SHA1FP sha1, int oft, int len);
@@ -62,8 +63,12 @@ class MetadataManager {
 
     private:
         std::string metadata_file_path;
-        // FP-index
+        // FP-index used for normal deduplication
         std::unordered_map<SHA1FP, ENTRY_VALUE, TupleHasher, TupleEqualer> fp_table_origin;
         std::unordered_map<SHA1FP, ENTRY_VALUE, TupleHasher, TupleEqualer> fp_table_added;
+
+        // used for piling deduplication
+        std::unordered_map<SHA1FP, ENTRY_VALUE, TupleHasher, TupleEqualer> fp_table_piling;
+        std::unordered_map<SHA1FP, ENTRY_VALUE, TupleHasher, TupleEqualer> fp_table_chain;
 };
 #endif

@@ -1,6 +1,6 @@
 {
   "Task": "write",
-  "InputFile": "/home/cyf/hikvision/hdd1/linuxVersion/linux-5.10.100.tar",
+  "InputFile": "/home/cyf/hikvision/hdd1/linuxVersion/",
   "ChunkingMethod": "cdc",
   "Size": 4096,
   "Normal": 2,
@@ -8,8 +8,8 @@
   "containersPath": "/home/cyf/hikvision/ssd1/working/Containers",
   "fileRecipesPath": "/home/cyf/hikvision/ssd1/working/metadata/FileRecipes",
   "fingerprintsFilePath": "/home/cyf/hikvision/ssd1/working/metadata/fingerprints.meta",
-
-  "piling":"yes",
-  "piling_num":2, 
-  "chain_num":10
+  "fingerprintsPilingFolderPath": "/home/cyf/hikvision/ssd1/working/metadata/fingerprintPiling",
+  "piling": "no",
+  "piling_num": 1,
+  "chain_num": 9
 }

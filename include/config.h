@@ -47,6 +47,7 @@ class Config{
         bool getMerkleTree(){return this->merkle_tree;}
         enum RESTORE_METHOD getRestoreMethod(){return this->rm;}
 
+        string getFingerprintsPilingFolderPath(){return this->fingerprints_piling_folder_path;}
         string getFingerprintsFilePath(){return this->fingerprints_file_path;}
         string getFileRecipesPath(){return this->file_recipe_path;}        
         string getContainersPath(){return this->container_path;}     
@@ -77,6 +78,7 @@ class Config{
         void setMerkleTree(char* s){this->merkle_tree = yesNoTrans(s);}
         void setRestoreMethod(char* s){this->rm = restoreMethodTrans(s);}
 
+        void setFingerprintsPilingFolderPath(char* s){this->fingerprints_piling_folder_path = s;}
         void setFingerprintsFilePath(char* s){this->fingerprints_file_path = s;}
         void setFileRecipesPath(char* s){this->file_recipe_path = s;}        
         void setContainersPath(char* s){this->container_path = s;}     
@@ -143,7 +145,9 @@ class Config{
                     Config::getInstance().setRestoreMethod(valuestring);
                 }
                 //2. metadata configurations
-                else if (strcmp(name, "fingerprintsFilePath") == 0) {
+                else if (strcmp(name, "fingerprintsPilingFolderPath") == 0) {
+                    Config::getInstance().setFingerprintsPilingFolderPath(valuestring);
+                }else if (strcmp(name, "fingerprintsFilePath") == 0) {
                     Config::getInstance().setFingerprintsFilePath(valuestring);
                 } else if (strcmp(name, "fileRecipesPath") == 0) {
                     Config::getInstance().setFileRecipesPath(valuestring);
@@ -193,6 +197,7 @@ class Config{
         bool merkle_tree;
 
         // 元数据相关参数
+        string fingerprints_piling_folder_path;
         string fingerprints_file_path; // 也可用作merkle tree L0
         string file_recipe_path;
         string container_path;

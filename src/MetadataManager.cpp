@@ -1,4 +1,5 @@
 #include "MetadataManager.h"
+#include "config.h"
 #include "assert.h" 
 #include <stdlib.h>
 #include <fcntl.h>
@@ -7,14 +8,52 @@
 
 MetadataManager *GlobalMetadataManagerPtr;
 
-int MetadataManager::load(uint32_t piling_num, uint32_t chain_num){
-    printf("-----------------------Loading Piling FP-index-----------------------\n");
-    return 0;
-}
 
-int MetadataManager::save(int current_version, int piling_size, int chain_size, int piling_left, int piling_right){
-    printf("-----------------------Saving One File FP-index-----------------------\n");
+int MetadataManager::save(int current_version, int chain_size, int piling_pos){
+    //printf("-----------------------Saving One File FP-index-----------------------\n");
+    std::string fp_name(Config::getInstance().getFingerprintsPilingFolderPath());
+    fp_name.append("/fp_");
+    fp_name.append(std::to_string(current_version));
+    if(current_version == piling_pos)
+        fp_name.append("/_piling");
+    else
+        fp_name.append("/_chain");
 
+    int fd = open(this->metadata_file_path.c_str(), O_WRONLY | O_CREAT, 0777);
+    if(fd < 0){
+        perror("Saving fp index error, the reason is ");
+        exit(-1);
+    }
+
+    int count = 0;
+
+    if(current_version == piling_pos){
+        for(auto item : this->fp_table_piling){
+            write(fd, (uint8_t*)&item.first, sizeof(SHA1FP));
+            write(fd, (uint8_t*)&item.second, sizeof(ENTRY_VALUE));
+            count++;
+        }
+    }else if(current_version <= (piling_pos + chain_size)){
+        for(auto item : this->fp_table_chain){
+            write(fd, (uint8_t*)&item.first, sizeof(SHA1FP));
+            write(fd, (uint8_t*)&item.second, sizeof(ENTRY_VALUE));
+            count++;
+        }
+    }else{
+        printf("Saving fp error\n");
+        exit(-1);
+    }
+
+    // clear piling fp table
+    if(current_version == (piling_pos + chain_size)){
+        fp_table_piling.clear(); 
+    }
+
+    // clear chain fp table
+    fp_table_chain.clear();
+
+    //printf("total item %d\n", count);
+    close(fd);
     return 0;
 }
 
@@ -88,31 +127,29 @@ LookupResult MetadataManager::dedupLookup(SHA1FP sha1){
     return Unique;
 }
 
-LookupResult MetadataManager::dedupLookup(SHA1FP sha1, uint32_t cur_version,
-                                          uint32_t min_destination_piling, uint32_t max_destination_piling){
-    auto dedupIter = this->fp_table_origin.find(sha1);
-    if(dedupIter != this->fp_table_origin.end()){
-        if(min_destination_piling <= dedupIter->second.version && dedupIter->second.version <= max_destination_piling)
-            return Dedup;
-        else
-            return Unique;
-    }
+LookupResult MetadataManager::dedupLookup(SHA1FP sha1, bool in_chain){
+    auto dedupIter = this->fp_table_piling.find(sha1);
+    if(dedupIter != this->fp_table_piling.end())
+        return Dedup;
 
-    dedupIter = this->fp_table_added.find(sha1);
-    if(dedupIter != this->fp_table_added.end()){
-        if(min_destination_piling <= dedupIter->second.version && dedupIter->second.version <= max_destination_piling)
-            return Dedup;
-        else if(dedupIter->second.version == cur_version)
-            return Dedup;
-        else
-            return Unique;
-    }
 
+    dedupIter = this->fp_table_chain.find(sha1);
+    if(dedupIter != this->fp_table_chain.end())
+        return Dedup;
+    
     return Unique;
 }
 
 int MetadataManager::addNewEntry(SHA1FP sha1, ENTRY_VALUE value){
     this->fp_table_added.emplace(sha1, value);
+    return 0;
+}
+
+int MetadataManager::addNewEntry(SHA1FP sha1, ENTRY_VALUE value, bool in_chain){
+    if(in_chain)
+        this->fp_table_chain.emplace(sha1, value);
+    else    
+        this->fp_table_piling.emplace(sha1, value);
     return 0;
 }
 
