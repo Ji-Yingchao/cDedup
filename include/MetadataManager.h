@@ -27,6 +27,7 @@ struct ENTRY_VALUE {
     uint16_t chunk_length;
     uint16_t container_inner_index;
     uint32_t ref_cnt;
+    uint32_t version;
 };
 
 struct TupleHasher {
@@ -34,10 +35,6 @@ struct TupleHasher {
         return key.fp1;
     }
 };
-
-// bool operator == (const SHA1FP &lhs, const SHA1FP &rhs) {
-//         return lhs.fp1 == rhs.fp1 && lhs.fp2 == rhs.fp2 && lhs.fp3 == rhs.fp3 && lhs.fp4 == rhs.fp4;
-// }
 
 struct TupleEqualer {
     bool operator()(const SHA1FP &lhs, const SHA1FP &rhs) const {
@@ -53,8 +50,11 @@ class MetadataManager {
 
         int save();
         int load();
+        int save(int, int, int, int, int);
+        int load(uint32_t, uint32_t);
         LookupResult dedupLookup(SHA1FP sha1);
-                int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value);
+        LookupResult dedupLookup(SHA1FP sha1, uint32_t, uint32_t, uint32_t);
+        int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value);
         int addRefCnt(const SHA1FP sha1);
         int decRefCnt(const SHA1FP sha1);
         int chunkOffsetDec(SHA1FP sha1, int oft, int len);
@@ -65,5 +65,5 @@ class MetadataManager {
         // FP-index
         std::unordered_map<SHA1FP, ENTRY_VALUE, TupleHasher, TupleEqualer> fp_table_origin;
         std::unordered_map<SHA1FP, ENTRY_VALUE, TupleHasher, TupleEqualer> fp_table_added;
-        };
+};
 #endif

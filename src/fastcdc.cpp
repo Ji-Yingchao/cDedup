@@ -194,6 +194,7 @@ void fastCDC_init(int fas, int NC_level) {
 int FastCDC_with_NC(unsigned char *p, int n) {
     uint64_t fingerprint = 0;
     int i = MinSize;
+    int mid = fastcdc_avg_size;
 
     // cut point skipping
     if (n <= MinSize)  
@@ -202,9 +203,9 @@ int FastCDC_with_NC(unsigned char *p, int n) {
     if (n > MaxSize)
         n = MaxSize;
     else if (n <= fastcdc_avg_size)
-        fastcdc_avg_size = n;
+        mid = n;
 
-    while (i < fastcdc_avg_size) {
+    while (i < mid) {
         fingerprint = (fingerprint << 1) + (GEARv2[p[i]]);
 
         if ((!(fingerprint & Mask_front))) {

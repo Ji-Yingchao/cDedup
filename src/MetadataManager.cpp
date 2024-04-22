@@ -7,6 +7,17 @@
 
 MetadataManager *GlobalMetadataManagerPtr;
 
+int MetadataManager::load(uint32_t piling_num, uint32_t chain_num){
+    printf("-----------------------Loading Piling FP-index-----------------------\n");
+    return 0;
+}
+
+int MetadataManager::save(int current_version, int piling_size, int chain_size, int piling_left, int piling_right){
+    printf("-----------------------Saving One File FP-index-----------------------\n");
+
+    return 0;
+}
+
 int MetadataManager::load(){
     printf("-----------------------Loading FP-index-----------------------\n");
     printf("Loading index..\n");
@@ -16,13 +27,14 @@ int MetadataManager::load(){
     if(fd < 0)
         printf("MetadataManager::load error\n");
     int n = read(fd, metadata_cache, FILE_CACHE);
-    int entry_count = n/META_DATA_SIZE;
+    int meta_size = sizeof(SHA1FP) + sizeof(ENTRY_VALUE);
+    int entry_count = n/meta_size;
     SHA1FP tmp_fp;
     ENTRY_VALUE tmp_value;
 
     for(int i=0; i<=entry_count-1; i++){
-        memcpy(&tmp_fp, metadata_cache+i*META_DATA_SIZE, SHA1_LENGTH);
-        memcpy(&tmp_value, metadata_cache+i*META_DATA_SIZE+SHA1_LENGTH, VALUE_LENGTH);
+        memcpy(&tmp_fp, metadata_cache+i*meta_size, sizeof(SHA1FP));
+        memcpy(&tmp_value, metadata_cache+i*meta_size + sizeof(SHA1FP), sizeof(ENTRY_VALUE));
 
         this->fp_table_origin.emplace(tmp_fp, tmp_value);
     }
@@ -34,8 +46,6 @@ int MetadataManager::load(){
 
 int MetadataManager::save(){
     printf("-----------------------Saving FP-index-----------------------\n");
-    printf("Saving index..\n");
-
     int fd = open(this->metadata_file_path.c_str(), O_WRONLY | O_CREAT, 0777);
     if(fd < 0){
         perror("Saving fp index error, the reason is ");
@@ -63,6 +73,7 @@ int MetadataManager::save(){
     close(fd);
 }
 
+
 LookupResult MetadataManager::dedupLookup(SHA1FP sha1){
     auto dedupIter = this->fp_table_origin.find(sha1);
     if(dedupIter != this->fp_table_origin.end()){
@@ -77,9 +88,30 @@ LookupResult MetadataManager::dedupLookup(SHA1FP sha1){
     return Unique;
 }
 
+LookupResult MetadataManager::dedupLookup(SHA1FP sha1, uint32_t cur_version,
+                                          uint32_t min_destination_piling, uint32_t max_destination_piling){
+    auto dedupIter = this->fp_table_origin.find(sha1);
+    if(dedupIter != this->fp_table_origin.end()){
+        if(min_destination_piling <= dedupIter->second.version && dedupIter->second.version <= max_destination_piling)
+            return Dedup;
+        else
+            return Unique;
+    }
+
+    dedupIter = this->fp_table_added.find(sha1);
+    if(dedupIter != this->fp_table_added.end()){
+        if(min_destination_piling <= dedupIter->second.version && dedupIter->second.version <= max_destination_piling)
+            return Dedup;
+        else if(dedupIter->second.version == cur_version)
+            return Dedup;
+        else
+            return Unique;
+    }
+
+    return Unique;
+}
+
 int MetadataManager::addNewEntry(SHA1FP sha1, ENTRY_VALUE value){
-    auto dedupIter = this->fp_table_added.find(sha1);
-    assert(dedupIter == this->fp_table_added.end());
     this->fp_table_added.emplace(sha1, value);
     return 0;
 }

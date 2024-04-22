@@ -9,7 +9,6 @@ enum TASK_TYPE{
     TASK_RESTORE,
     TASK_WRITE,
     TASK_WRITE_PIPELINE,
-    TASK_WRITE_FOLDER,
     TASK_DELETE,
     NOT_CHOOSED
 };
@@ -60,6 +59,10 @@ class Config{
         string getMTL4(){return this->MTL4;}
         string getMTL5(){return this->MTL5;}
         string getMTL6(){return this->MTL6;}
+
+        bool isPiling(){return this->piling;}
+        int getPilingNum(){return this->piling_num;}
+        int getChainNum(){return this->chain_num;}
 
         // setters
         void setTask(char* s){this->tt = taskTypeTrans(s);}
@@ -213,8 +216,6 @@ class Config{
                 return TASK_WRITE;
             }else if (strcmp(s, "write_pipeline") == 0){
                 return TASK_WRITE_PIPELINE;
-            }else if (strcmp(s, "write_folder") == 0){
-                return TASK_WRITE_FOLDER;
             }else if (strcmp(s, "restore") == 0){
                 return TASK_RESTORE;
             }else if (strcmp(s, "delete") == 0){

@@ -12,6 +12,8 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <sys/sendfile.h>
+#include <experimental/filesystem>
+#include <algorithm>
 
 #include "fastcdc.h"
 #include "full_file_deduplicater.h"
@@ -29,15 +31,27 @@
 #include "pipeline.h"
 
 #define MB (1024*1024)
-//#define ENABLE_COMPRESSION
+#define GB (1024*1024*1024)
+
+struct backup_job{
+    uint64_t hash_collision_sum;
+    uint64_t sum_chunks;
+    uint64_t sum_size;
+    uint64_t dedup_chunks;
+    uint64_t dedup_size;
+    uint64_t file_num;
+};
+
+namespace fs = std::experimental::filesystem;
 
 uint32_t rev_container_cnt = 0;
 unsigned char rev_container_buf[CONTAINER_SIZE]={0};
 unsigned char tmp_buf[CONTAINER_SIZE]={0};
+
 char* global_stat_path = "/home/cyf/cDedup/global_stat.json";
 extern MetadataManager *GlobalMetadataManagerPtr;
-
 int (*chunking) (unsigned char*p, int n);
+struct backup_job bj;
 
 uint32_t getFilesNum(const char* dirPath){
     int ans = 0;
@@ -229,16 +243,7 @@ void flushAssemblingBuffer(int fd, unsigned char* buf, int len){
     //close(fd);
 }
 
-int main(int argc, char** argv){
-    // 超级权限
-    setuid(0);
-
-    // 参数解析
-    Config::getInstance().parse_argument(argc, argv);
-
-    // 全局统计信息解析
-    GlobalStat::getInstance().parse_arguments(global_stat_path);
-    
+void initChunkingAlgorithm(){
     if(Config::getInstance().getChunkingMethod() == CDC){
         int NC_level = Config::getInstance().getNormalLevel();
         int avg_size = Config::getInstance().getAvgChunkSize();
@@ -263,189 +268,247 @@ int main(int argc, char** argv){
             chunking = FSC_512;
         }else{
             printf("Invalid fixed size, the support size is 4 or 8 or 16\n");
-            return 0;
-        }
-    }
-    
-    GlobalMetadataManagerPtr = new MetadataManager(Config::getInstance().getFingerprintsFilePath().c_str());
-    int current_version = getFilesNum(Config::getInstance().getFileRecipesPath().c_str());
-    if(current_version != 0){
-        GlobalMetadataManagerPtr->load();
-    }
-
-    if(Config::getInstance().getTaskType() == TASK_WRITE_PIPELINE){
-        //
-        init_backup_jcr();
-        
-        //total time start
-        struct timeval backup_time_start, backup_time_end;
-        gettimeofday(&backup_time_start, NULL);
-
-        //start phases
-        start_read_phase();
-		start_chunk_phase();
-		start_hash_phase();
-        start_dedup_phase();
-        
-        // wait for the last pipeline finish
-        while(jcr.status == JCR_STATUS_RUNNING || jcr.status != JCR_STATUS_DONE){
-            usleep(10);
-        }
-
-        //stop phases
-        stop_read_phase();
-		stop_chunk_phase();
-		stop_hash_phase();
-        stop_dedup_phase();
-        
-        //total time end
-        gettimeofday(&backup_time_end, NULL);
-        jcr.total_time = (backup_time_end.tv_sec - backup_time_start.tv_sec) * 1000000 + 
-                          backup_time_end.tv_usec - backup_time_start.tv_usec;
-        
-        // statistcs
-        show_backup_jcr();
-
-    }else if(Config::getInstance().getTaskType() == TASK_WRITE_FOLDER){
-        ;
-    }else if(Config::getInstance().getTaskType() == TASK_WRITE){
-        // 一次任务的总时间
-        // MFDedup并没有计算load FP-index的时间
-        struct timeval backup_time_start, backup_time_end;
-        gettimeofday(&backup_time_start, NULL);
-
-        int idf = open(Config::getInstance().getInputPath().c_str(), O_RDONLY, 0777);
-        if(idf < 0){
-            printf("open file error, id %d, %s\n", errno, strerror(errno));
             exit(-1);
         }
+    }
+}
 
-        unsigned char* file_cache = (unsigned char*)malloc(FILE_CACHE);
-        struct SHA1FP sha1_fp;
-        unsigned char SHA_buf[SHA_DIGEST_LENGTH]={0};
-        unsigned char meta_data_buf[META_DATA_SIZE]={0};
-        std::vector<std::string> file_recipe; // 保存这个文件所有块的指纹
+void writeFile(string path){
+    int idf = open(path.c_str(), O_RDONLY, 0777);
+    if(idf < 0){
+        printf("open file error, id %d, %s\n", errno, strerror(errno));
+        exit(-1);
+    }
 
-        // metadata entry(except FP)
-        uint32_t container_index = getFilesNum(Config::getInstance().getContainersPath().c_str());
-        uint32_t container_inner_offset = 0;
-        uint32_t chunk_length = 0;
-        uint16_t container_inner_index = 0;
+    unsigned char* file_cache = (unsigned char*)malloc(FILE_CACHE);
+    struct SHA1FP sha1_fp;
+    std::vector<std::string> file_recipe; // 保存这个文件所有块的指纹
 
-        unsigned char container_buf[CONTAINER_SIZE]={0};
-        unsigned int container_buf_pointer = 0;
-        uint32_t file_offset = 0;
-        uint32_t n_read = 0;
+    // metadata entry(except FP)
+    uint32_t container_index = getFilesNum(Config::getInstance().getContainersPath().c_str());
+    uint32_t container_inner_offset = 0;
+    uint32_t chunk_length = 0;
+    uint16_t container_inner_index = 0;
 
-        struct ENTRY_VALUE entry_value;
+    unsigned char container_buf[CONTAINER_SIZE]={0};
+    unsigned int container_buf_pointer = 0;
+    uint32_t file_offset = 0;
+    uint32_t n_read = 0;
 
-        // 重删统计
-        long long dedup_chunks = 0;
-        long long sum_chunks = 0;
-        long long sum_size = 0;
-        long long dedup_size = 0;
-        long long hash_collision_sum = 0;
+    struct ENTRY_VALUE entry_value;
 
-        int n_version = getFilesNum(Config::getInstance().getFileRecipesPath().c_str());
-        // 普通分块重删，来一个块查寻一次，然后把non-duplicate chunk保存到container去
-        for(;;){
-            file_offset = 0;
+    // 重删统计
+    uint64_t dedup_chunks = 0;
+    uint64_t dedup_size = 0;
+    uint64_t sum_chunks = 0;
+    uint64_t sum_size = 0;
+    uint64_t hash_collision_sum = 0;
 
-            n_read = read(idf, file_cache, FILE_CACHE);
+    // 打桩重删
+    uint32_t current_version = getFilesNum(Config::getInstance().getFileRecipesPath().c_str());
+    uint32_t piling_num = Config::getInstance().getPilingNum();
+    uint32_t chain_num = Config::getInstance().getChainNum();
+    uint32_t min_destination_piling = current_version -  current_version % (piling_num + chain_num);
+    uint32_t max_destination_piling = min_destination_piling + piling_num - 1;
+    bool in_chain = (current_version % (piling_num + chain_num)) > (piling_num-1);
+    
+    // 普通分块重删，来一个块查寻一次，然后把non-duplicate chunk保存到container去
+    for(;;){
+        file_offset = 0;
 
-            if(n_read <= 0){
-                break;
+        n_read = read(idf, file_cache, FILE_CACHE);
+
+        if(n_read <= 0){
+            break;
+        }
+
+        while(file_offset < n_read){  
+            // Chunk
+            chunk_length = chunking(file_cache + file_offset, n_read - file_offset);
+            
+            // Hash
+            memset(&sha1_fp, 0, sizeof(struct SHA1FP));
+            SHA1(file_cache + file_offset, chunk_length, (uint8_t*)&sha1_fp);
+
+            // Dedup
+            LookupResult lookup_result;
+            lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp);
+
+            // 
+            if(lookup_result == Unique){
+                // save chunk itself
+                saveChunkToContainer(container_buf_pointer, container_buf, 
+                                    container_index, container_inner_offset, container_inner_index,
+                                    chunk_length, file_offset, file_cache, (void*)&sha1_fp,
+                                    Config::getInstance().getContainersPath().c_str());
+                
+                // save chunk metadata
+                entry_value.container_number = container_index;
+                entry_value.offset = container_inner_offset;
+                entry_value.chunk_length = chunk_length;
+                entry_value.container_inner_index = container_inner_index;
+                entry_value.version = current_version;
+                entry_value.ref_cnt = 1;
+                GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value);
+
+                // rev
+                container_inner_offset += chunk_length;
+                container_buf_pointer += chunk_length;
+                container_inner_index ++;
+                rev_container_cnt ++;
+
+            }else if(lookup_result == Dedup){
+                GlobalMetadataManagerPtr->addRefCnt(sha1_fp);
+                // 重删统计
+                dedup_chunks ++;
+                dedup_size += chunk_length;
+
+                // 可能遇到哈希碰撞
+                // TODO
             }
 
-            while(file_offset < n_read){  
-                // Chunk
-                chunk_length = chunking(file_cache + file_offset, n_read - file_offset);
-                
-                // Hash
-                memset(&sha1_fp, 0, sizeof(struct SHA1FP));
-                SHA1(file_cache + file_offset, chunk_length, (uint8_t*)&sha1_fp);
+            // Insert fingerprint into file recipe
+            file_recipe.push_back(std::string((char*)&sha1_fp, sizeof(struct SHA1FP)));
 
-                // Dedup
-                LookupResult lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp);
+            // Statistic
+            sum_chunks ++;
+            sum_size += chunk_length;
 
-                // 
-                if(lookup_result == Unique){
-                    // save chunk itself
-                    saveChunkToContainer(container_buf_pointer, container_buf, 
-                                        container_index, container_inner_offset, container_inner_index,
-                                        chunk_length, file_offset, file_cache, (void*)&sha1_fp,
-                                        Config::getInstance().getContainersPath().c_str());
-                    
-                    // save chunk metadata
-                    entry_value.container_number = container_index;
-                    entry_value.offset = container_inner_offset;
-                    entry_value.chunk_length = chunk_length;
-                    entry_value.container_inner_index = container_inner_index;
-                    entry_value.ref_cnt = 1;
-                    GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value);
+            file_offset += chunk_length;
+        }
+    }
 
-                    // rev
-                    container_inner_offset += chunk_length;
-                    container_buf_pointer += chunk_length;
-                    container_inner_index ++;
-                    rev_container_cnt ++;
+    //  flush最后一个container
+    if(container_buf_pointer > 0)
+        saveContainer(container_index, container_buf, 
+                        container_buf_pointer, Config::getInstance().getContainersPath().c_str());
+    
+    // flush file_recipe
+    saveFileRecipe(file_recipe, Config::getInstance().getFileRecipesPath().c_str());
+    // printf("Sum chunks %" PRIu64 "\n",    sum_chunks);
+    // printf("Sum size %" PRIu64 "\n",    sum_size);
+    // printf("Unique chunks %" PRIu64 "\n",    sum_chunks - dedup_chunks);
+    printf("Dedup Ratio %.2f%\n",     double(dedup_size) / double(sum_size) *100);
 
-                }else if(lookup_result == Dedup){
-                    GlobalMetadataManagerPtr->addRefCnt(sha1_fp);
-                    // 重删统计
-                    dedup_chunks ++;
-                    dedup_size += chunk_length;
+    // update backup job
+    bj.dedup_chunks += dedup_chunks;
+    bj.dedup_size += dedup_size;
+    bj.sum_chunks += sum_chunks;
+    bj.sum_size += sum_size;
+    bj.hash_collision_sum += hash_collision_sum;
+    bj.file_num++;
 
-                    // 可能遇到哈希碰撞
-                    // TODO
-                }
+    // free 
+    close(idf);
+    free(file_cache);
+}
 
-                // Insert fingerprint into file recipe
-                file_recipe.push_back(std::string((char*)&sha1_fp, sizeof(struct SHA1FP)));
+std::vector<fs::path> traverseDirectory(const fs::path& directory) {
+    try {
+        std::vector<fs::path> files;
 
-                // Statistic
-                sum_chunks ++;
-                sum_size += chunk_length;
-
-                file_offset += chunk_length;
+        // 遍历目录
+        for (const auto& entry : fs::directory_iterator(directory)) {
+            if (fs::is_regular_file(entry)) {
+                files.push_back(entry.path());
+            } else if (fs::is_directory(entry)) {
+                traverseDirectory(entry.path());
             }
         }
 
-        //  flush最后一个container
-        if(container_buf_pointer > 0)
-            saveContainer(container_index, container_buf, 
-                          container_buf_pointer, Config::getInstance().getContainersPath().c_str());
+        return files;
+    } catch (const std::exception& ex) {
+        std::cerr << "Error: " << ex.what() << std::endl;
+    }
+}
+
+void traverseWriteDirectory(const fs::path& directory) {
+    try {
+        // 遍历目录
+        std::vector<fs::path> files = traverseDirectory(directory);
+
+        // 对文件名进行排序
+        std::sort(files.begin(), files.end());
+
+        for (const auto& path : files){
+            //cout << path <<endl;
+            writeFile(path);
+        }
+            
         
-        // flush file_recipe
-        saveFileRecipe(file_recipe, Config::getInstance().getFileRecipesPath().c_str());
+    } catch (const std::exception& ex) {
+        std::cerr << "Error: " << ex.what() << std::endl;
+    }
+}
+
+int main(int argc, char** argv){
+    // 超级权限
+    setuid(0);
+
+    // 参数解析
+    Config::getInstance().parse_argument(argc, argv);
+
+    // 全局统计信息解析
+    GlobalStat::getInstance().parse_arguments(global_stat_path);
+    
+    GlobalMetadataManagerPtr = new MetadataManager(Config::getInstance().getFingerprintsFilePath().c_str());
+    
+    if(Config::getInstance().getTaskType() == TASK_WRITE){
+        int current_version = getFilesNum(Config::getInstance().getFileRecipesPath().c_str());
+        if(current_version != 0){
+            GlobalMetadataManagerPtr->load();
+        }
+
+        initChunkingAlgorithm();
+
+        string input_path = Config::getInstance().getInputPath();
+
+        if (!fs::exists(input_path)) {
+            std::cerr << "Error: Input path does not exist." << std::endl;
+            return 1;
+        }
+
+        struct timeval backup_time_start, backup_time_end;
+        gettimeofday(&backup_time_start, NULL);
+
+        if (!fs::is_directory(input_path)) {
+            writeFile(input_path);
+        }else{
+            traverseWriteDirectory(input_path);
+        }
+
+        gettimeofday(&backup_time_end, NULL);
+
+        // throughput
+        uint64_t single_dedup_time_us = (backup_time_end.tv_sec - backup_time_start.tv_sec) * 1000000 + 
+                                         backup_time_end.tv_usec - backup_time_start.tv_usec;
+        float throughput = (float)(bj.sum_size) / MB / ((float)(single_dedup_time_us)/1000000);
+
+        // 写文件 - 重删统计
+        printf("-----------------------Dedup statics----------------------\n");
+        printf("Hash collision num %" PRIu64 "\n",    bj.hash_collision_sum); // should be zero
+        printf("Sum chunks num % " PRIu64 "\n",       bj.sum_chunks);
+        printf("Sum data size %" PRIu64 "\n",         bj.sum_size);
+        printf("Average chunk size %" PRIu64 "\n",    bj.sum_size / bj.sum_chunks);
+        printf("Dedup chunks num %" PRIu64 "\n",      bj.dedup_chunks);
+        printf("Dedup data size %" PRIu64 "\n",       bj.dedup_size);
+        printf("-----------------------statics----------------------\n");
+        printf("Throughput %.2f MiB/s\n",    throughput);
+        printf("Dedup Ratio %.2f%\n",     double(bj.dedup_size) / double(bj.sum_size) *100);
+
+        // 保存全局信息
+        GlobalStat::getInstance().update(bj.sum_size, bj.sum_size - bj.dedup_size);
+        GlobalStat::getInstance().save_arguments(global_stat_path);
 
         // save metadata entry
         GlobalMetadataManagerPtr->save();
 
-        // throughput
-        gettimeofday(&backup_time_end, NULL);
-
-        uint64_t single_dedup_time_us = (backup_time_end.tv_sec - backup_time_start.tv_sec) * 1000000 + backup_time_end.tv_usec - backup_time_start.tv_usec;
-        float throughput = (float)(sum_size) / MB / ((float)(single_dedup_time_us)/1000000);
-
-        // 写文件 - 重删统计
-        printf("-----------------------Dedup statics----------------------\n");
-        printf("Hash collision num %lld\n", hash_collision_sum); // should be zero
-        printf("Sum chunks num %lld\n",     sum_chunks);
-        printf("Sum data size %lld\n",      sum_size);
-        printf("Average chunk size(all) %d\n", sum_size/sum_chunks);
-        printf("Dedup chunks num %lld\n",   dedup_chunks);
-        printf("Dedup data size %lld\n",    dedup_size);
-        printf("-----------------------statics----------------------\n");
-        printf("Throughput %.2f MiB/s\n",    throughput);
-        printf("Dedup Ratio %.2f%\n",     double(dedup_size) / double(sum_size) *100);
-        close(idf);
-
-        // 保存全局信息
-        GlobalStat::getInstance().update(sum_size, sum_size - dedup_size);
-        GlobalStat::getInstance().save_arguments(global_stat_path);
-
     }else if(Config::getInstance().getTaskType() == TASK_RESTORE){
+        int current_version = getFilesNum(Config::getInstance().getFileRecipesPath().c_str());
+        if(current_version != 0){
+            GlobalMetadataManagerPtr->load();
+        }
+
         struct timeval restore_time_start, restore_time_end;
         gettimeofday(&restore_time_start, NULL);
 
