@@ -47,7 +47,7 @@ class Config{
         bool getMerkleTree(){return this->merkle_tree;}
         enum RESTORE_METHOD getRestoreMethod(){return this->rm;}
 
-        string getFingerprintsPilingFolderPath(){return this->fingerprints_piling_folder_path;}
+        string getFpDeltaDedupFolderPath(){return this->fp_DeltaDedup_folder_path;}
         string getFingerprintsFilePath(){return this->fingerprints_file_path;}
         string getFileRecipesPath(){return this->file_recipe_path;}        
         string getContainersPath(){return this->container_path;}     
@@ -61,9 +61,9 @@ class Config{
         string getMTL5(){return this->MTL5;}
         string getMTL6(){return this->MTL6;}
 
-        bool isPiling(){return this->piling;}
-        int getPilingNum(){return this->piling_num;}
-        int getChainNum(){return this->chain_num;}
+        bool isDeltaDedup(){return this->b_DeltaDedup;}
+        int getBaseSize(){return this->base_size;}
+        int getDeltaNum(){return this->delta_num;}
 
         // setters
         void setTask(char* s){this->tt = taskTypeTrans(s);}
@@ -78,7 +78,7 @@ class Config{
         void setMerkleTree(char* s){this->merkle_tree = yesNoTrans(s);}
         void setRestoreMethod(char* s){this->rm = restoreMethodTrans(s);}
 
-        void setFingerprintsPilingFolderPath(char* s){this->fingerprints_piling_folder_path = s;}
+        void setFpDeltaDedupFolder(char* s){this->fp_DeltaDedup_folder_path = s;}
         void setFingerprintsFilePath(char* s){this->fingerprints_file_path = s;}
         void setFileRecipesPath(char* s){this->file_recipe_path = s;}        
         void setContainersPath(char* s){this->container_path = s;}     
@@ -92,9 +92,9 @@ class Config{
         void setMTL5(char* s){this->MTL5 = s;}
         void setMTL6(char* s){this->MTL6 = s;}
 
-        void setPiling(char* s){this->piling = yesNoTrans(s);}
-        void setPilingNum(int n){this->piling_num = n;};
-        void setChainNum(int n){this->chain_num = n;};
+        void setDeltaDedup(char* s){this->b_DeltaDedup = yesNoTrans(s);}
+        void setBaseSize(int n){this->base_size = n;};
+        void setDeltaNum(int n){this->delta_num = n;};
 
         // you know
         void parse_argument(int argc, char **argv)
@@ -145,8 +145,8 @@ class Config{
                     Config::getInstance().setRestoreMethod(valuestring);
                 }
                 //2. metadata configurations
-                else if (strcmp(name, "fingerprintsPilingFolderPath") == 0) {
-                    Config::getInstance().setFingerprintsPilingFolderPath(valuestring);
+                else if (strcmp(name, "fingerprintsDeltaDedupFolder") == 0) {
+                    Config::getInstance().setFpDeltaDedupFolder(valuestring);
                 }else if (strcmp(name, "fingerprintsFilePath") == 0) {
                     Config::getInstance().setFingerprintsFilePath(valuestring);
                 } else if (strcmp(name, "fileRecipesPath") == 0) {
@@ -172,12 +172,12 @@ class Config{
                     Config::getInstance().setMTL6(valuestring);
                 }
 
-                else if (strcmp(name, "piling") == 0) {
-                    Config::getInstance().setPiling(valuestring);
-                }else if (strcmp(name, "piling_num") == 0) {
-                    Config::getInstance().setPilingNum(val_int);
-                }else if (strcmp(name, "chain_num") == 0) {
-                    Config::getInstance().setChainNum(val_int);
+                else if (strcmp(name, "DeltaDedup") == 0) {
+                    Config::getInstance().setDeltaDedup(valuestring);
+                }else if (strcmp(name, "base_size") == 0) {
+                    Config::getInstance().setBaseSize(val_int);
+                }else if (strcmp(name, "delta_num") == 0) {
+                    Config::getInstance().setDeltaNum(val_int);
                 }
             }
         }
@@ -197,7 +197,7 @@ class Config{
         bool merkle_tree;
 
         // 元数据相关参数
-        string fingerprints_piling_folder_path;
+        string fp_DeltaDedup_folder_path;
         string fingerprints_file_path; // 也可用作merkle tree L0
         string file_recipe_path;
         string container_path;
@@ -206,9 +206,9 @@ class Config{
         string MTL1, MTL2, MTL3, MTL4, MTL5, MTL6;
 
         //打桩重删参数
-        bool piling;
-        int piling_num;
-        int chain_num;
+        bool b_DeltaDedup;
+        int base_size;
+        int delta_num;
 
         Config() {
             avg_chunk_size = 4096;

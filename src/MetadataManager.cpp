@@ -9,32 +9,32 @@
 MetadataManager *GlobalMetadataManagerPtr;
 
 
-int MetadataManager::save(int current_version, int chain_size, int piling_pos){
+int MetadataManager::save(int current_version, int delta_size, int base_pos){
     //printf("-----------------------Saving One File FP-index-----------------------\n");
-    std::string fp_name(Config::getInstance().getFingerprintsPilingFolderPath());
+    std::string fp_name(Config::getInstance().getFpDeltaDedupFolderPath());
     fp_name.append("/fp_");
     fp_name.append(std::to_string(current_version));
-    if(current_version == piling_pos)
-        fp_name.append("/_piling");
+    if(current_version == base_pos)
+        fp_name.append("_base");
     else
-        fp_name.append("/_chain");
+        fp_name.append("_delta");
 
-    int fd = open(this->metadata_file_path.c_str(), O_WRONLY | O_CREAT, 0777);
+    int fd = open(fp_name.c_str(), O_RDWR | O_CREAT, 0777);
     if(fd < 0){
         perror("Saving fp index error, the reason is ");
         exit(-1);
     }
 
     int count = 0;
-
-    if(current_version == piling_pos){
-        for(auto item : this->fp_table_piling){
+    if(current_version == base_pos){
+        for(auto item : this->fp_table_base){
             write(fd, (uint8_t*)&item.first, sizeof(SHA1FP));
             write(fd, (uint8_t*)&item.second, sizeof(ENTRY_VALUE));
             count++;
         }
-    }else if(current_version <= (piling_pos + chain_size)){
-        for(auto item : this->fp_table_chain){
+    }else if(current_version <= (base_pos + delta_size)){
+        for(auto item : this->fp_table_delta){
+            int n = 0;
             write(fd, (uint8_t*)&item.first, sizeof(SHA1FP));
             write(fd, (uint8_t*)&item.second, sizeof(ENTRY_VALUE));
             count++;
@@ -44,13 +44,11 @@ int MetadataManager::save(int current_version, int chain_size, int piling_pos){
         exit(-1);
     }
 
-    // clear piling fp table
-    if(current_version == (piling_pos + chain_size)){
-        fp_table_piling.clear(); 
+    if(current_version == (base_pos + delta_size)){
+        fp_table_base.clear(); 
     }
 
-    // clear chain fp table
-    fp_table_chain.clear();
+    fp_table_delta.clear();
 
     //printf("total item %d\n", count);
     close(fd);
@@ -127,14 +125,14 @@ LookupResult MetadataManager::dedupLookup(SHA1FP sha1){
     return Unique;
 }
 
-LookupResult MetadataManager::dedupLookup(SHA1FP sha1, bool in_chain){
-    auto dedupIter = this->fp_table_piling.find(sha1);
-    if(dedupIter != this->fp_table_piling.end())
+LookupResult MetadataManager::dedupLookup(SHA1FP sha1, bool in_delta){
+    auto dedupIter = this->fp_table_base.find(sha1);
+    if(dedupIter != this->fp_table_base.end())
         return Dedup;
 
 
-    dedupIter = this->fp_table_chain.find(sha1);
-    if(dedupIter != this->fp_table_chain.end())
+    dedupIter = this->fp_table_delta.find(sha1);
+    if(dedupIter != this->fp_table_delta.end())
         return Dedup;
     
     return Unique;
@@ -145,11 +143,11 @@ int MetadataManager::addNewEntry(SHA1FP sha1, ENTRY_VALUE value){
     return 0;
 }
 
-int MetadataManager::addNewEntry(SHA1FP sha1, ENTRY_VALUE value, bool in_chain){
-    if(in_chain)
-        this->fp_table_chain.emplace(sha1, value);
+int MetadataManager::addNewEntry(SHA1FP sha1, ENTRY_VALUE value, bool in_delta){
+    if(in_delta)
+        this->fp_table_delta.emplace(sha1, value);
     else    
-        this->fp_table_piling.emplace(sha1, value);
+        this->fp_table_base.emplace(sha1, value);
     return 0;
 }
 
@@ -163,38 +161,6 @@ int MetadataManager::addRefCnt(const SHA1FP sha1){
     printf("addRefCnt: did not find\n");
 }
 
-int MetadataManager::decRefCnt(const SHA1FP sha1){
-    auto dedupIter = this->fp_table_origin.find(sha1);
-    if(dedupIter != this->fp_table_origin.end()){
-        if(dedupIter->second.ref_cnt > 1)
-            return --dedupIter->second.ref_cnt;
-        else{
-            fp_table_origin.erase(dedupIter);
-            return 0;
-        }
-    }
-    printf("decRefCnt: did not find\n");
-}
-
 ENTRY_VALUE MetadataManager::getEntry(const SHA1FP sha1){
     return this->fp_table_origin[sha1];
-}
-
-
-int MetadataManager::chunkOffsetDec(SHA1FP sha1, int oft, int len){
-    auto dedupIter = this->fp_table_origin.find(sha1);
-    if(dedupIter != this->fp_table_origin.end()){
-        if(dedupIter->second.offset > oft)
-            dedupIter->second.offset -= len;
-        return 0;
-    }
-
-    dedupIter = this->fp_table_added.find(sha1);
-    if(dedupIter != this->fp_table_added.end()){
-        if(dedupIter->second.offset > oft)
-            dedupIter->second.offset -= len;
-        return 0;
-    }
-    printf("MetadataManager::chunkOffsetDec error\n");
-    exit(-1);
 }

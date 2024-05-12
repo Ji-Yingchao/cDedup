@@ -57,8 +57,6 @@ class MetadataManager {
         int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value);
         int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value, bool);
         int addRefCnt(const SHA1FP sha1);
-        int decRefCnt(const SHA1FP sha1);
-        int chunkOffsetDec(SHA1FP sha1, int oft, int len);
         ENTRY_VALUE getEntry(const SHA1FP sha1);
 
     private:
@@ -67,8 +65,8 @@ class MetadataManager {
         std::unordered_map<SHA1FP, ENTRY_VALUE, TupleHasher, TupleEqualer> fp_table_origin;
         std::unordered_map<SHA1FP, ENTRY_VALUE, TupleHasher, TupleEqualer> fp_table_added;
 
-        // used for piling deduplication
-        std::unordered_map<SHA1FP, ENTRY_VALUE, TupleHasher, TupleEqualer> fp_table_piling;
-        std::unordered_map<SHA1FP, ENTRY_VALUE, TupleHasher, TupleEqualer> fp_table_chain;
+        // used for delta deduplication
+        std::unordered_map<SHA1FP, ENTRY_VALUE, TupleHasher, TupleEqualer> fp_table_base;
+        std::unordered_map<SHA1FP, ENTRY_VALUE, TupleHasher, TupleEqualer> fp_table_delta;
 };
 #endif
