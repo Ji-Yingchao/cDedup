@@ -442,33 +442,39 @@ int main(int argc, char** argv){
         GlobalMetadataManagerPtr->save();
 
     }else if(Config::getInstance().getTaskType() == TASK_RESTORE){
-        int current_version = getFilesNum(Config::getInstance().getFileRecipesPath().c_str());
+        // 如果写时使用DeltaDedup，那么恢复时参数也需要指定DeltaDedup
+        int restore_version = Config::getInstance().getRestoreVersion();
+        string recipe_path = Config::getInstance().getFileRecipesPath();
+
+        int current_version = getFilesNum(recipe_path.c_str());
         if(current_version != 0){
-            GlobalMetadataManagerPtr->load();
+            if(Config::getInstance().isDeltaDedup()){
+                GlobalMetadataManagerPtr->load(restore_version);
+            }else{
+                GlobalMetadataManagerPtr->load();
+            }
         }
 
         struct timeval restore_time_start, restore_time_end;
         gettimeofday(&restore_time_start, NULL);
 
-        int restore_size = 0;
-
-        if(!fileRecipeExist(Config::getInstance().getRestoreVersion(),
-                            Config::getInstance().getFileRecipesPath().c_str())){
-            printf("Version %d not exist!\n", Config::getInstance().getRestoreVersion());
+        if(!fileRecipeExist(restore_version, recipe_path.c_str())){
+            printf("Version %d not exist!\n", restore_version);
             return 0;
         }
         
         unsigned char* assembling_buffer = (unsigned char*)malloc(FILE_CACHE);
         memset(assembling_buffer, 0, FILE_CACHE);
         int write_buffer_offset = 0;
+        int restored_size = 0;
 
         //recipe
         std::vector<std::string> file_recipe = getFileRecipe(Config::getInstance().getRestoreVersion(),
                                                              Config::getInstance().getFileRecipesPath().c_str());
 
         //组装
-        if(Config::getInstance().getRestoreMethod() == CONTAINER_CACHE ||
-           Config::getInstance().getRestoreMethod() == CHUNK_CACHE){
+        RESTORE_METHOD rm = Config::getInstance().getRestoreMethod();
+        if(rm == CONTAINER_CACHE || rm == CHUNK_CACHE){
             int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT, 0777);
             if(fd < 0){
                 printf("无法写文件!!! %s\n", strerror(errno));
@@ -476,43 +482,33 @@ int main(int argc, char** argv){
             }
 
             Cache* cc;
-            if(Config::getInstance().getRestoreMethod() == CONTAINER_CACHE){
-                cc = new ContainerCache(Config::getInstance().getContainersPath().c_str(), 128);
-            }else if(Config::getInstance().getRestoreMethod() == CHUNK_CACHE){
+            if(rm == CONTAINER_CACHE){
+                cc = new ContainerCache(Config::getInstance().getContainersPath().c_str(), 16);
+            }else if(rm == CHUNK_CACHE){
                 cc = new ChunkCache(Config::getInstance().getContainersPath().c_str(), 16*1024);
             }
             
+            SHA1FP fp;
+            ENTRY_VALUE ev;
             for(auto &x : file_recipe){
-                SHA1FP fp;
                 memcpy(&fp, x.data(), sizeof(SHA1FP));
-                LookupResult res = GlobalMetadataManagerPtr->dedupLookup(fp);
-
-                if(res == Unique){
-                    printf("Fatal error!!!\n");
-                    exit(-1);
-                }
-
-                ENTRY_VALUE ev = GlobalMetadataManagerPtr->getEntry(fp);
+                ev = GlobalMetadataManagerPtr->getEntry(fp);
                 std::string ck_data = cc->getChunkData(ev);
-                if(ck_data.size() != ev.chunk_length){
-                    printf("Fatal error size different!!!\n");
-                    exit(-1);
-                }
 
                 if(write_buffer_offset + ck_data.size() >= FILE_CACHE){
                     flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
                     write_buffer_offset = 0;
                 }
 
-                memcpy(assembling_buffer + write_buffer_offset, 
-                    ck_data.data(), ck_data.size());
-                write_buffer_offset += ev.chunk_length;
+                memcpy(assembling_buffer + write_buffer_offset, ck_data.data(), ck_data.size());
 
-                restore_size += ev.chunk_length;
+                write_buffer_offset += ev.chunk_length;
+                restored_size += ev.chunk_length;
             }
 
             flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
             close(fd);
+
         }else if(Config::getInstance().getRestoreMethod() == FAA_FIXED){
             int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT, 0777);
             if(fd < 0){
@@ -569,7 +565,7 @@ int main(int argc, char** argv){
                                 container_read_buffer + x.container_offset, x.length);
                                 x.used = true;
 
-                                restore_size += x.length;
+                                restored_size += x.length;
                             }
                         }
                     }
@@ -587,9 +583,9 @@ int main(int argc, char** argv){
 
         gettimeofday(&restore_time_end, NULL);
         uint64_t single_dedup_time_us = (restore_time_end.tv_sec - restore_time_start.tv_sec) * 1000000 + restore_time_end.tv_usec - restore_time_start.tv_usec;
-        float restore_throughput = (float)(restore_size) / MB / ((float)(single_dedup_time_us)/1000000);
+        float restore_throughput = (float)(restored_size) / MB / ((float)(single_dedup_time_us)/1000000);
         printf("-----------------------Restore statics----------------------\n");
-        printf("Restore size %d\n", restore_size);
+        printf("Restore size %d\n", restored_size);
         printf("Restore Throughput %.2f MiB/s\n", restore_throughput);
 
     }

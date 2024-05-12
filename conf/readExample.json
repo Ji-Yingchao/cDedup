@@ -1,10 +1,14 @@
 {
   "Task": "restore",
-  "RestorePath": "/home/cyf/dataSSD/working/restoreFolder/restore1",
-  "RestoreVersion": 1,
+  "RestorePath": "/home/cyf/hikvision/ssd2/restore15",
+  "RestoreVersion": 15,
   "ChunkingMethod": "cdc",
-  "RestoreMethod": "chunk",
-  "fingerprintsFilePath": "/home/cyf/dataSSD/working/metadata/fingerprints.meta",
-  "fileRecipesPath": "/home/cyf/dataSSD/working/metadata/FileRecipes",
-  "containersPath": "/home/cyf/dataSSD/working/Containers"
+  "RestoreMethod": "container",
+  "containersPath": "/home/cyf/hikvision/hdd1/working/Containers",
+  "fileRecipesPath": "/home/cyf/hikvision/hdd1/working/metadata/FileRecipes",
+  "fingerprintsFilePath": "/home/cyf/hikvision/hdd1/working/metadata/fingerprints.meta",
+  "fingerprintsDeltaDedupFolder": "/home/cyf/hikvision/hdd1/working/metadata/fingerprintsDeltaDedup",
+  "DeltaDedup": "no",
+  "base_size": 1,
+  "delta_num": 9
 }
