@@ -25,7 +25,7 @@ void ContainerCache::loadContainer(int container_index){
     std::string container_name(this->containers_path);
     container_name.append("/container");
     container_name.append(std::to_string(container_index));
-    int fd = open(container_name.data(), O_RDONLY);
+    int fd = open(container_name.data(), O_RDONLY | O_DIRECT);
 
     memset(this->container_buf, 0, CONTAINER_SIZE);
     int n = read(fd, this->container_buf, CONTAINER_SIZE); // 可能塞不满

@@ -5,12 +5,13 @@
 #include<vector>
 #include<queue>
 
+#define SECTOR_SIZE (512)
 class ContainerCache : public Cache{
     public:
         ContainerCache(const char* containersPath, int cache_max_size){
             this->containers_path = containersPath;
             this->cache_max_size = cache_max_size; // 单位：容器数量
-            this->container_buf = (char*)malloc(CONTAINER_SIZE);
+            posix_memalign((void**)&this->container_buf, SECTOR_SIZE, CONTAINER_SIZE);
         }
 
         ~ContainerCache(){
