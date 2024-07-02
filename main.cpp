@@ -48,10 +48,12 @@ uint32_t rev_container_cnt = 0;
 unsigned char rev_container_buf[CONTAINER_SIZE]={0};
 unsigned char tmp_buf[CONTAINER_SIZE]={0};
 
-char* global_stat_path = "/home/cyf/cDedup/global_stat.json";
+char* global_stat_path = "/home/jyc/cDedup/global_stat.json";
 extern MetadataManager *GlobalMetadataManagerPtr;
 int (*chunking) (unsigned char*p, int n);
 struct backup_job bj;
+
+bool clear_base = true;
 
 uint32_t getFilesNum(const char* dirPath){
     int ans = 0;
@@ -237,9 +239,17 @@ void writeFile(string path){
     uint32_t current_version = getFilesNum(Config::getInstance().getFileRecipesPath().c_str());
     uint32_t base_size = Config::getInstance().getBaseSize();
     uint32_t delta_num = Config::getInstance().getDeltaNum();
+    uint32_t min_dr = Config::getInstance().getMinDR();
     uint32_t min_destination_base = current_version -  current_version % (base_size + delta_num);
     uint32_t max_destination_base = min_destination_base + base_size - 1;
-    bool in_delta = (current_version % (base_size + delta_num)) > (base_size-1);
+    bool in_delta = false;
+    if(min_dr == 0){
+        in_delta = (current_version % (base_size + delta_num)) > (base_size-1);
+    }else if(clear_base){
+        in_delta = false;
+    }else{
+        in_delta = true;
+    }
     
     // 普通分块重删，来一个块查寻一次，然后把non-duplicate chunk保存到container去
     for(;;){
@@ -321,6 +331,7 @@ void writeFile(string path){
     // printf("Sum chunks %" PRIu64 "\n",    sum_chunks);
     // printf("Sum size %" PRIu64 "\n",    sum_size);
     // printf("Unique chunks %" PRIu64 "\n",    sum_chunks - dedup_chunks);
+    double cur_dr = double(dedup_size) / double(sum_size);
     printf("%.2f%\n",     double(dedup_size) / double(sum_size) *100);
 
     // update backup job
@@ -331,8 +342,12 @@ void writeFile(string path){
     bj.hash_collision_sum += hash_collision_sum;
     bj.file_num++;
 
-    if(dd)
+    if(dd && (min_dr == 0)){
         GlobalMetadataManagerPtr->save(current_version, delta_num, min_destination_base);
+    }else if(dd && (min_dr > 0)){
+        clear_base = (cur_dr < (double)min_dr/100) && in_delta;
+        GlobalMetadataManagerPtr->saveVersion(current_version, in_delta, clear_base);
+    }
 
     // free 
     close(idf);
@@ -449,7 +464,11 @@ int main(int argc, char** argv){
         int current_version = getFilesNum(recipe_path.c_str());
         if(current_version != 0){
             if(Config::getInstance().isDeltaDedup()){
-                GlobalMetadataManagerPtr->load(restore_version);
+                if(Config::getInstance().getMinDR() == 0){
+                    GlobalMetadataManagerPtr->load(restore_version);
+                }else{
+                    GlobalMetadataManagerPtr->loadVersion(restore_version);
+                }
             }else{
                 GlobalMetadataManagerPtr->load();
             }
@@ -464,9 +483,11 @@ int main(int argc, char** argv){
         }
         
         unsigned char* assembling_buffer = (unsigned char*)malloc(FILE_CACHE);
+
         memset(assembling_buffer, 0, FILE_CACHE);
         int write_buffer_offset = 0;
-        int restored_size = 0;
+        uint64_t restored_size = 0;
+        uint64_t container_read_count = 0;
 
         //recipe
         std::vector<std::string> file_recipe = getFileRecipe(Config::getInstance().getRestoreVersion(),
@@ -483,7 +504,7 @@ int main(int argc, char** argv){
 
             Cache* cc;
             if(rm == CONTAINER_CACHE){
-                cc = new ContainerCache(Config::getInstance().getContainersPath().c_str(), 16);
+                cc = new ContainerCache(Config::getInstance().getContainersPath().c_str(), Config::getInstance().getCacheSize());
             }else if(rm == CHUNK_CACHE){
                 cc = new ChunkCache(Config::getInstance().getContainersPath().c_str(), 16*1024);
             }
@@ -507,6 +528,7 @@ int main(int argc, char** argv){
             }
 
             flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
+            container_read_count = cc->getContainerReadCount();
             close(fd);
 
         }else if(Config::getInstance().getRestoreMethod() == FAA_FIXED){
@@ -584,10 +606,11 @@ int main(int argc, char** argv){
         gettimeofday(&restore_time_end, NULL);
         uint64_t single_dedup_time_us = (restore_time_end.tv_sec - restore_time_start.tv_sec) * 1000000 + restore_time_end.tv_usec - restore_time_start.tv_usec;
         float restore_throughput = (float)(restored_size) / MB / ((float)(single_dedup_time_us)/1000000);
+        float speed_factor = (float)(restored_size) / MB / ((float)container_read_count);
         printf("-----------------------Restore statics----------------------\n");
-        printf("Restore size %d\n", restored_size);
+        printf("Restore size %" PRIu64 "\n",    restored_size);
         printf("Restore Throughput %.2f MiB/s\n", restore_throughput);
-
+        printf("Speed factor %.2f\n", speed_factor);
     }
 
     return 0;

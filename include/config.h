@@ -46,6 +46,7 @@ class Config{
         int getNormalLevel(){return this->normal_level;}
         bool getMerkleTree(){return this->merkle_tree;}
         enum RESTORE_METHOD getRestoreMethod(){return this->rm;}
+        int getCacheSize(){return this->cache_size;}
 
         string getFpDeltaDedupFolderPath(){return this->fp_DeltaDedup_folder_path;}
         string getFingerprintsFilePath(){return this->fingerprints_file_path;}
@@ -64,6 +65,7 @@ class Config{
         bool isDeltaDedup(){return this->b_DeltaDedup;}
         int getBaseSize(){return this->base_size;}
         int getDeltaNum(){return this->delta_num;}
+        int getMinDR(){return this->min_dr;}
 
         // setters
         void setTask(char* s){this->tt = taskTypeTrans(s);}
@@ -77,6 +79,7 @@ class Config{
         void setNormal(int n){this->normal_level = n;}
         void setMerkleTree(char* s){this->merkle_tree = yesNoTrans(s);}
         void setRestoreMethod(char* s){this->rm = restoreMethodTrans(s);}
+        void setCacheSize(int n){this->cache_size = n;}
 
         void setFpDeltaDedupFolder(char* s){this->fp_DeltaDedup_folder_path = s;}
         void setFingerprintsFilePath(char* s){this->fingerprints_file_path = s;}
@@ -95,6 +98,7 @@ class Config{
         void setDeltaDedup(char* s){this->b_DeltaDedup = yesNoTrans(s);}
         void setBaseSize(int n){this->base_size = n;};
         void setDeltaNum(int n){this->delta_num = n;};
+        void setMinDR(int n){this->min_dr = n;};
 
         // you know
         void parse_argument(int argc, char **argv)
@@ -143,6 +147,8 @@ class Config{
                     Config::getInstance().setMerkleTree(valuestring);
                 }else if (strcmp(name, "RestoreMethod") == 0) {
                     Config::getInstance().setRestoreMethod(valuestring);
+                }else if (strcmp(name, "cache_size") == 0) {
+                    Config::getInstance().setCacheSize(val_int);
                 }
                 //2. metadata configurations
                 else if (strcmp(name, "fingerprintsDeltaDedupFolder") == 0) {
@@ -178,6 +184,8 @@ class Config{
                     Config::getInstance().setBaseSize(val_int);
                 }else if (strcmp(name, "delta_num") == 0) {
                     Config::getInstance().setDeltaNum(val_int);
+                }else if (strcmp(name, "min_dr") == 0) {
+                    Config::getInstance().setMinDR(val_int);
                 }
             }
         }
@@ -195,6 +203,7 @@ class Config{
         int avg_chunk_size;     // unit KiB
         int normal_level;
         bool merkle_tree;
+        int cache_size;
 
         // 元数据相关参数
         string fp_DeltaDedup_folder_path;
@@ -209,6 +218,7 @@ class Config{
         bool b_DeltaDedup;
         int base_size;
         int delta_num;
+        int min_dr;
 
         Config() {
             avg_chunk_size = 4096;

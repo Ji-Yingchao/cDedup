@@ -32,6 +32,7 @@ void ContainerCache::loadContainer(int container_index){
     std::string content(this->container_buf , n);
 
     this->cache[container_index] = content;
+    this->addContainerReadCount();
     close(fd);
 }
 

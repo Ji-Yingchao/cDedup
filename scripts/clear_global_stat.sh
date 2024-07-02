@@ -1,6 +1,6 @@
 #!/bin/bash
 
-json_file="/home/cyf/cDedup/global_stat.json"
+json_file="/home/jyc/cDedup/global_stat.json"
 
 # Check if jq is installed
 if ! command -v jq > /dev/null; then

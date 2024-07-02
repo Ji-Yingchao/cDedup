@@ -8,6 +8,11 @@ SyncQueue* chunk_queue;
 /* Output of hash phase. */
 SyncQueue* hash_queue;
 
+/* Output of read recipe phase. */
+SyncQueue* restore_recipe_queue;
+/* Output of read chunk phase. */
+SyncQueue* restore_chunk_queue;
+
 struct chunk* new_chunk(int32_t size) {
 	struct chunk* ck = (struct chunk*) malloc(sizeof(struct chunk));
 

@@ -12,6 +12,7 @@ class ContainerCache : public Cache{
             this->containers_path = containersPath;
             this->cache_max_size = cache_max_size; // 单位：容器数量
             posix_memalign((void**)&this->container_buf, SECTOR_SIZE, CONTAINER_SIZE);
+            this->initContainerReadCount();
         }
 
         ~ContainerCache(){

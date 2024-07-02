@@ -51,8 +51,10 @@ class MetadataManager {
         int save();
         int load();
         int load(int restore_version);
+        int loadVersion(int restore_version);
         //暂不支持中断打桩写入，只支持目录批量一次性写入，所以没有对应的load函数
         int save(int, int, int);
+        int saveVersion(int, bool, bool);
         LookupResult dedupLookup(SHA1FP sha1);
         LookupResult dedupLookup(SHA1FP sha1, bool);
         int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value);
