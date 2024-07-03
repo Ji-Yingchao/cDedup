@@ -131,6 +131,28 @@ std::vector<std::string> getFileRecipe(uint8_t restore_version, const char* file
     return ans;
 }
 
+//从元数据文件获取entry
+std::vector<ENTRY_VALUE> getEntryValue(std::string fp_name){
+    unsigned char* metadata_cache = (unsigned char*)malloc(FILE_CACHE);
+    int fd = open(fp_name.c_str(), O_RDONLY);
+    if(fd < 0)
+        printf("MetadataManager::load error\n");
+    
+    int n = read(fd, metadata_cache, FILE_CACHE);
+    int meta_size = sizeof(SHA1FP) + sizeof(ENTRY_VALUE);
+    int entry_count = n/meta_size;
+    ENTRY_VALUE tmp_value;
+    std::vector<ENTRY_VALUE> ans;
+
+    for(int i=0; i<=entry_count-1; i++){
+        memcpy(&tmp_value, metadata_cache+i*meta_size + sizeof(SHA1FP), sizeof(ENTRY_VALUE));
+        ans.push_back(tmp_value);
+    }
+    close(fd);
+    free(metadata_cache);
+    return ans;
+}
+
 void saveContainer(int container_index, unsigned char* container_buf, unsigned int len, const char* containersPath){
     std::string container_name(containersPath);
     container_name.append("/container");
@@ -392,6 +414,39 @@ void traverseWriteDirectory(const fs::path& directory) {
     }
 }
 
+void deleteFile(int delete_version){
+    string recipe_path = Config::getInstance().getFileRecipesPath();
+    if(!fileRecipeExist(delete_version, recipe_path.c_str())){
+        printf("Version %d not exist!\n", delete_version);
+        exit(-1);
+    }
+
+    //找到元数据
+    std::string fp_name(Config::getInstance().getFpDeltaDedupFolderPath());
+    fp_name.append("/fp_");
+    fp_name.append(std::to_string(delete_version));
+    fp_name.append("_delta");
+
+    std::vector<ENTRY_VALUE> entrys = getEntryValue(fp_name);
+    for(auto &entry: entrys){
+        //移除container
+        uint32_t container_index = entry.container_number;
+        std::string container_name(Config::getInstance().getContainersPath().c_str());
+        container_name.append("/container");
+        container_name.append(std::to_string(container_index));
+        remove(container_name.c_str());
+    }
+
+    //移除recipe
+    std::string recipe_name(recipe_path);
+    recipe_name.append("/recipe");
+    recipe_name.append(std::to_string(delete_version));
+    remove(recipe_name.c_str());
+
+    //移除fingerprint
+    remove(fp_name.c_str());
+}
+
 int main(int argc, char** argv){
     // 超级权限
     setuid(0);
@@ -421,7 +476,7 @@ int main(int argc, char** argv){
             return 1;
         }
 
-        struct timeval backup_time_start, backup_time_end;
+        struct timeval backup_time_start, backup_time_end;  
         gettimeofday(&backup_time_start, NULL);
 
         if (!fs::is_directory(input_path)) {
@@ -611,6 +666,28 @@ int main(int argc, char** argv){
         printf("Restore size %" PRIu64 "\n",    restored_size);
         printf("Restore Throughput %.2f MiB/s\n", restore_throughput);
         printf("Speed factor %.2f\n", speed_factor);
+    }else if(Config::getInstance().getTaskType() == TASK_DELETE){
+        // 仅实现固定DeltaDedup的删除
+        int delete_version = Config::getInstance().getDeleteVersion();
+
+        bool dd = Config::getInstance().isDeltaDedup();
+        if(!dd){
+            printf("暂不支持DeltaDedup以外的删除方案\n");
+            exit(-1);
+        }
+
+        uint32_t base_size = Config::getInstance().getBaseSize();
+        uint32_t delta_num = Config::getInstance().getDeltaNum();
+        bool in_delta = (delete_version % (base_size + delta_num)) > (base_size-1);
+        if(in_delta){
+            deleteFile(delete_version);
+
+            //如果连续删除，删掉最后一个delta版本之后，删除该版本对应的base
+            if(delete_version == base_size+delta_num){
+                deleteFile(delete_version-delta_num);
+            }
+        }
+
     }
 
     return 0;

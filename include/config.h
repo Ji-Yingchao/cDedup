@@ -39,6 +39,7 @@ class Config{
         string getInputPath(){return this->input_path;}
         string getRestorePath(){return this->restore_path;}
         int getRestoreVersion(){return this->restore_version;}
+        int getDeleteVersion(){return this->delete_version;}
         enum CHUNKING_METHOD getChunkingMethod(){return this->cm;}
         int getRestoreId(){return this->restore_id;}
         int getDeleteId(){return this->delete_id;}
@@ -72,6 +73,7 @@ class Config{
         void setInputFile(char* s){this->input_path = s;}
         void setRestorePath(char* s){this->restore_path = s;}
         void setRestoreVersion(int n){this->restore_version = n;}
+        void setDeleteVersion(int n){this->delete_version = n;}
         void setChunkingMethod(char* s){this->cm = cmTypeTrans(s);}
         void setRestoreId(int n){this->restore_id = n;}
         void setDeleteId(int n){this->delete_id = n;}
@@ -204,6 +206,7 @@ class Config{
         int normal_level;
         bool merkle_tree;
         int cache_size;
+        int delete_version;     // used for delete
 
         // 元数据相关参数
         string fp_DeltaDedup_folder_path;
