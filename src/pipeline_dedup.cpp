@@ -4,6 +4,8 @@
 #include <vector>
 #include <jcr.h>
 #include "MetadataManager.h"
+#include <regex>
+#include <experimental/filesystem>
 
 static pthread_t dedup_t;
 static std::vector<std::string> file_recipe; // 保存这个文件所有块的指纹
@@ -16,6 +18,7 @@ static uint16_t container_inner_index = 0;
 
 extern SyncQueue* hash_queue;
 extern MetadataManager *GlobalMetadataManagerPtr;
+namespace fs = std::experimental::filesystem;
 
 static uint32_t getFilesNum(const char* dirPath){
     int ans = 0;
@@ -68,6 +71,30 @@ static void resetContainerBuf(){
 	container_inner_index = 0;
 }
 
+// 获取文件版本
+static int getVersion(const char* dirPath, const std::string& prefix){
+    std::vector<int> recipe_numbers;
+    std::regex recipe_pattern(prefix + R"((\d+))");
+
+    // 遍历文件夹中的文件
+    for (const auto& entry : fs::directory_iterator(dirPath)) {
+        std::string filename = entry.path().filename().string();
+        std::smatch match;
+        if (std::regex_search(filename, match, recipe_pattern)) {
+            int number = std::stoi(match[1].str());
+            recipe_numbers.push_back(number);
+        }
+    }
+
+    // 找到最大的数字
+    if (!recipe_numbers.empty()) {
+        int last_recipe_number = *std::max_element(recipe_numbers.begin(), recipe_numbers.end());
+        return last_recipe_number+1;
+    } else {
+        return 0;
+    }
+}
+
 void *dedup_thread(void *arg) {
 	container_buf = (unsigned char*)malloc(CONTAINER_SIZE);
 	container_index = getFilesNum(Config::getInstance().getContainersPath().c_str());
@@ -78,6 +105,13 @@ void *dedup_thread(void *arg) {
 
 	struct ENTRY_VALUE entry_value;
 	
+	bool dd = Config::getInstance().isDeltaDedup();
+    uint32_t current_version = getVersion(Config::getInstance().getFileRecipesPath().c_str(), "recipe");
+    uint32_t base_size = Config::getInstance().getBaseSize();
+    uint32_t delta_num = Config::getInstance().getDeltaNum();
+	uint32_t min_destination_base = current_version -  current_version % (base_size + delta_num);
+	bool in_delta = (current_version % (base_size + delta_num)) > (base_size-1);
+
     while (1) {
 		struct chunk *c = NULL;
 		c = (struct chunk *)sync_queue_pop(hash_queue);
@@ -100,7 +134,12 @@ void *dedup_thread(void *arg) {
 		// lookup fingerprint
 		SHA1FP sha1_fp;
 		memcpy(&sha1_fp, c->fp, 20);
-        LookupResult lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp);
+		LookupResult lookup_result;
+		if(dd)
+			lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp, in_delta); 
+		else
+			lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp);
+        
 
 		if(lookup_result == Unique){
 			jcr.unique_chunk_num += 1;
@@ -121,7 +160,11 @@ void *dedup_thread(void *arg) {
 			entry_value.chunk_length = c->size;
 			entry_value.container_inner_index = container_inner_index;
 			entry_value.ref_cnt = 1;
-			GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value);
+			if(dd){
+				GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value, in_delta);
+			}else{
+				GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value);
+			}
 
 			// container buf pointer
 			container_inner_offset += c->size;
@@ -143,6 +186,9 @@ void *dedup_thread(void *arg) {
 
     // save metadata entry
     GlobalMetadataManagerPtr->save();
+	if(dd){
+        GlobalMetadataManagerPtr->save(current_version, delta_num, min_destination_base);
+    }
     
 	/* All files done */
     jcr.status = JCR_STATUS_DONE;

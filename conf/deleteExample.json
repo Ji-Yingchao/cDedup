@@ -1,7 +1,10 @@
 {
   "Task": "delete",
-  "RestoreVersion": 19,
-  "fingerprintsFilePath": "/home/jyc/dataSSD/working/metadata/fingerprints.meta",
-  "fileRecipesPath": "/home/jyc/dataSSD/working/metadata/FileRecipes",
-  "containersPath": "/home/jyc/dataSSD/working/Containers"
+  "DeleteVersion": 39,
+  "fingerprintsDeltaDedupFolder": "/home/jyc/hdd/linux/working0_5/metadata/fingerprintsDeltaDedup",
+  "fileRecipesPath": "/home/jyc/hdd/linux/working0_5/metadata/FileRecipes",
+  "containersPath": "/home/jyc/hdd/linux/working0_5/Containers",
+  "DeltaDedup": "yes",
+  "base_size": 1,
+  "delta_num": 9
 }

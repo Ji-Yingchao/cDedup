@@ -156,7 +156,7 @@ int extractNumber(const std::string& filename) {
     return -1; // 如果无法提取数字，返回-1
 }
 
-// 自定义比较函数，按文件名中的数字部分排序
+// 按文件名中的数字部分排序
 bool compareFiles(const fs::path& a, const fs::path& b) {
     int numA = extractNumber(a.filename().string());
     int numB = extractNumber(b.filename().string());
@@ -174,17 +174,12 @@ std::string findBaseFile(const std::string& delta_file) {
     std::sort(files_path.begin(), files_path.end(), compareFiles);
     auto it = std::find(files_path.begin(), files_path.end(), delta_file);
     if (it != files_path.end()) {
-        for (--it; it != files_path.begin(); --it) {
+        for (--it; ; --it) {
             std::string filename = it->filename().string();
             if (filename.find("base") != std::string::npos) {
                 return it->string();
             }
-        }
-        if (it == files_path.begin()) {
-            std::string filename = it->filename().string();
-            if (filename.find("base") != std::string::npos) {
-                return it->string();
-            }
+            if(it == files_path.begin())   break;
         }
     }
     return "";

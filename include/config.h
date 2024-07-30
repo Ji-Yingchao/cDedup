@@ -39,6 +39,7 @@ class Config{
         string getInputPath(){return this->input_path;}
         string getRestorePath(){return this->restore_path;}
         int getRestoreVersion(){return this->restore_version;}
+        int getRetainVersionNumber(){return this->retain_version_number;}
         int getDeleteVersion(){return this->delete_version;}
         enum CHUNKING_METHOD getChunkingMethod(){return this->cm;}
         int getRestoreId(){return this->restore_id;}
@@ -73,6 +74,7 @@ class Config{
         void setInputFile(char* s){this->input_path = s;}
         void setRestorePath(char* s){this->restore_path = s;}
         void setRestoreVersion(int n){this->restore_version = n;}
+        void setRetainVersionNumber(int n){this->retain_version_number = n;}
         void setDeleteVersion(int n){this->delete_version = n;}
         void setChunkingMethod(char* s){this->cm = cmTypeTrans(s);}
         void setRestoreId(int n){this->restore_id = n;}
@@ -135,6 +137,10 @@ class Config{
                     Config::getInstance().setRestorePath(valuestring);
                 } else if (strcmp(name, "RestoreVersion") == 0) {
                     Config::getInstance().setRestoreVersion(val_int);
+                } else if (strcmp(name, "DeleteVersion") == 0) {
+                    Config::getInstance().setDeleteVersion(val_int);
+                } else if (strcmp(name, "RetainVersionNumber") == 0) {
+                    Config::getInstance().setRetainVersionNumber(val_int);
                 } else if (strcmp(name, "ChunkingMethod") == 0) {
                     Config::getInstance().setChunkingMethod(valuestring);
                 } else if (strcmp(name, "RestoreId") == 0) {
@@ -222,6 +228,7 @@ class Config{
         int base_size;
         int delta_num;
         int min_dr;
+        int retain_version_number;
 
         Config() {
             avg_chunk_size = 4096;
