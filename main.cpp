@@ -276,7 +276,6 @@ void writeFile(string path){
     std::vector<std::string> file_recipe; // 保存这个文件所有块的指纹
 
     // metadata entry(except FP)
-    // uint32_t container_index = getFilesNum(Config::getInstance().getContainersPath().c_str());
     uint32_t container_index = getVersion(Config::getInstance().getContainersPath().c_str(),"container");
     uint32_t container_inner_offset = 0;
     uint32_t chunk_length = 0;
@@ -311,6 +310,10 @@ void writeFile(string path){
         in_delta = false;
     }else{
         in_delta = true;
+    }
+
+    if(Config::getInstance().isDeltaDedup() && in_delta){
+        GlobalMetadataManagerPtr->loadVersion(current_version-1,false);
     }
     
     // 普通分块重删，来一个块查寻一次，然后把non-duplicate chunk保存到container去
@@ -438,7 +441,8 @@ std::vector<fs::path> traverseDirectory(const fs::path& directory) {
 
 uint64_t getFileSize(int version){
     std::vector<std::string> file_recipe = getFileRecipe(version,Config::getInstance().getFileRecipesPath().c_str());
-    GlobalMetadataManagerPtr->load(version);
+    // GlobalMetadataManagerPtr->load(version);
+    GlobalMetadataManagerPtr->loadVersion(version,true);
     uint64_t file_size = 0;
     SHA1FP fp;
     ENTRY_VALUE ev;
@@ -461,7 +465,6 @@ void deleteFile(int delete_version,bool in_delta){
     struct timeval delete_time_start, delete_time_end;  
     gettimeofday(&delete_time_start, NULL);
 
-    //找到元数据
     uint64_t file_size = getFileSize(delete_version);
     std::string fp_name = GlobalMetadataManagerPtr->genFPname(delete_version, !in_delta);
     std::vector<uint32_t> ids = getContainerIds(fp_name, file_size);
@@ -488,6 +491,25 @@ void deleteFile(int delete_version,bool in_delta){
     printf("Delete time %.2f s\n",(float)(single_delete_time_us)/1000000);
 }
 
+// DeltaDedup连续版本的删除
+void do_delete(int current_version){
+    int retain_version_number = Config::getInstance().getRetainVersionNumber();
+    if(retain_version_number>=0 && current_version >= retain_version_number){
+        int delete_version = current_version - Config::getInstance().getRetainVersionNumber();
+        uint32_t base_size = Config::getInstance().getBaseSize();
+        uint32_t delta_num = Config::getInstance().getDeltaNum();
+        bool in_delta = (delete_version % (base_size + delta_num)) > (base_size-1);
+        
+        if(in_delta){
+            deleteFile(delete_version, true);
+            //如果连续删除，删掉最后一个delta版本之后，删除该版本对应的base
+            if(delete_version % (base_size+delta_num) == delta_num){
+                deleteFile(delete_version-delta_num, false);
+            }
+        }
+    }
+}
+
 void traverseWriteDirectory(const fs::path& directory) {
     try {
         // 遍历目录
@@ -500,20 +522,7 @@ void traverseWriteDirectory(const fs::path& directory) {
         for (const auto& path : files){
             writeFile(path);
 
-            // 只保留指定数量的版本
-            if(Config::getInstance().getRetainVersionNumber()>0 && i >= Config::getInstance().getRetainVersionNumber()){
-                int delete_version = i - Config::getInstance().getRetainVersionNumber();
-                uint32_t base_size = Config::getInstance().getBaseSize();
-                uint32_t delta_num = Config::getInstance().getDeltaNum();
-                bool in_delta = (delete_version % (base_size + delta_num)) > (base_size-1);
-                if(in_delta){
-                    deleteFile(delete_version, true);
-                    //如果连续删除，删掉最后一个delta版本之后，删除该版本对应的base
-                    if(delete_version % (base_size+delta_num) == delta_num){
-                        deleteFile(delete_version-delta_num, false);
-                    }
-                }
-            }
+            do_delete(i);
             i++;
             printf("Actual DR %.4f \n", double(bj.sum_size) / double(bj.sum_size - bj.dedup_size) );
         }
@@ -536,264 +545,239 @@ int main(int argc, char** argv){
     
     GlobalMetadataManagerPtr = new MetadataManager(Config::getInstance().getFingerprintsFilePath().c_str());
 
+    // 不支持普通重删和DeltaDedup混合写入
     if(Config::getInstance().getTaskType() == TASK_WRITE){
+        int current_version = getVersion(Config::getInstance().getFileRecipesPath().c_str(), "recipe");
+        if(current_version != 0){
+            if(!Config::getInstance().isDeltaDedup()){
+                GlobalMetadataManagerPtr->load();
+            }
+        }
+
+        initChunkingAlgorithm();
+
+        string input_path = Config::getInstance().getInputPath();
+
+        if (!fs::exists(input_path)) {
+            std::cerr << "Error: Input path does not exist." << std::endl;
+            return 1;
+        }
+
         struct timeval backup_time_start, backup_time_end;  
         gettimeofday(&backup_time_start, NULL);
 
-        start_read_phase();
-        start_chunk_phase();
-        start_hash_phase();
-        start_dedup_phase();
-        do{
-            sleep(1);
-            // /*time_t now = time(NULL);*/
-            // fprintf(stderr,"job %" PRId32 ", %" PRId64 " bytes, %" PRId32 " chunks, %d files processed\r", 
-            //         jcr.id, jcr.data_size, jcr.chunk_num, jcr.file_num);
-        }while(jcr.status == JCR_STATUS_RUNNING || jcr.status != JCR_STATUS_DONE);
-
-        stop_read_phase();
-        stop_chunk_phase();
-        stop_hash_phase();
-        stop_dedup_phase();
+        if (!fs::is_directory(input_path)) {
+            writeFile(input_path);
+        }else{
+            traverseWriteDirectory(input_path);
+        }
 
         gettimeofday(&backup_time_end, NULL);
-        jcr.total_time = (backup_time_end.tv_sec - backup_time_start.tv_sec) * 1000000 + 
-                                          backup_time_end.tv_usec - backup_time_start.tv_usec;
-        printf("throughput(MB/s): %.2f\n",
-			(double) jcr.data_size * 1000000 / (1024 * 1024 * jcr.total_time));
+
+        // throughput
+        uint64_t single_dedup_time_us = (backup_time_end.tv_sec - backup_time_start.tv_sec) * 1000000 + 
+                                         backup_time_end.tv_usec - backup_time_start.tv_usec;
+        float throughput = (float)(bj.sum_size) / MB / ((float)(single_dedup_time_us)/1000000);
+
+        // 写文件 - 重删统计
+        printf("-----------------------Dedup statics----------------------\n");
+        printf("Hash collision num %" PRIu64 "\n",    bj.hash_collision_sum); // should be zero
+        printf("Sum chunks num % " PRIu64 "\n",       bj.sum_chunks);
+        printf("Sum data size %" PRIu64 "\n",         bj.sum_size);
+        printf("Average chunk size %" PRIu64 "\n",    bj.sum_size / bj.sum_chunks);
+        printf("Dedup chunks num %" PRIu64 "\n",      bj.dedup_chunks);
+        printf("Dedup data size %" PRIu64 "\n",       bj.dedup_size);
+        printf("-----------------------statics----------------------\n");
+        printf("Throughput %.2f MiB/s\n",    throughput);
+        printf("Dedup Ratio %.2f%\n",     double(bj.dedup_size) / double(bj.sum_size) *100);
+
+        // 保存全局信息
+        GlobalStat::getInstance().update(bj.sum_size, bj.sum_size - bj.dedup_size);
+        GlobalStat::getInstance().save_arguments(global_stat_path);
+        
+        // save metadata entry
+        GlobalMetadataManagerPtr->save();
+
     }
-    
-    // 不支持普通重删和DeltaDedup混合写入
-    // if(Config::getInstance().getTaskType() == TASK_WRITE){
-    //     //int current_version = getFilesNum(Config::getInstance().getFileRecipesPath().c_str());
-    //     int current_version = getVersion(Config::getInstance().getFileRecipesPath().c_str(), "recipe");
-    //     if(current_version != 0){
-    //         if(!Config::getInstance().isDeltaDedup())
-    //             GlobalMetadataManagerPtr->load();
-    //     }
+    else if(Config::getInstance().getTaskType() == TASK_RESTORE){
+        // pipeline恢复更慢
+        //do_restore();
+        // 如果写时使用DeltaDedup，那么恢复时参数也需要指定DeltaDedup
+        int restore_version = Config::getInstance().getRestoreVersion();
+        string recipe_path = Config::getInstance().getFileRecipesPath();
 
-    //     initChunkingAlgorithm();
+        int current_version = getFilesNum(recipe_path.c_str());
+        if(current_version != 0){
+            if(Config::getInstance().isDeltaDedup()){
+                // if(Config::getInstance().getMinDR() == 0){
+                //     GlobalMetadataManagerPtr->load(restore_version);
+                // }else{
+                GlobalMetadataManagerPtr->loadVersion(restore_version,true);
+                // }
+            }else{
+                GlobalMetadataManagerPtr->load();
+            }
+        }
 
-    //     string input_path = Config::getInstance().getInputPath();
+        struct timeval restore_time_start, restore_time_end;
+        gettimeofday(&restore_time_start, NULL);
 
-    //     if (!fs::exists(input_path)) {
-    //         std::cerr << "Error: Input path does not exist." << std::endl;
-    //         return 1;
-    //     }
-
-    //     struct timeval backup_time_start, backup_time_end;  
-    //     gettimeofday(&backup_time_start, NULL);
-
-    //     if (!fs::is_directory(input_path)) {
-    //         writeFile(input_path);
-    //     }else{
-    //         traverseWriteDirectory(input_path);
-    //     }
-
-    //     gettimeofday(&backup_time_end, NULL);
-
-    //     // throughput
-    //     uint64_t single_dedup_time_us = (backup_time_end.tv_sec - backup_time_start.tv_sec) * 1000000 + 
-    //                                      backup_time_end.tv_usec - backup_time_start.tv_usec;
-    //     float throughput = (float)(bj.sum_size) / MB / ((float)(single_dedup_time_us)/1000000);
-
-    //     // 写文件 - 重删统计
-    //     printf("-----------------------Dedup statics----------------------\n");
-    //     printf("Hash collision num %" PRIu64 "\n",    bj.hash_collision_sum); // should be zero
-    //     printf("Sum chunks num % " PRIu64 "\n",       bj.sum_chunks);
-    //     printf("Sum data size %" PRIu64 "\n",         bj.sum_size);
-    //     printf("Average chunk size %" PRIu64 "\n",    bj.sum_size / bj.sum_chunks);
-    //     printf("Dedup chunks num %" PRIu64 "\n",      bj.dedup_chunks);
-    //     printf("Dedup data size %" PRIu64 "\n",       bj.dedup_size);
-    //     printf("-----------------------statics----------------------\n");
-    //     printf("Throughput %.2f MiB/s\n",    throughput);
-    //     printf("Dedup Ratio %.2f%\n",     double(bj.dedup_size) / double(bj.sum_size) *100);
-
-    //     // 保存全局信息
-    //     GlobalStat::getInstance().update(bj.sum_size, bj.sum_size - bj.dedup_size);
-    //     GlobalStat::getInstance().save_arguments(global_stat_path);
+        if(!fileRecipeExist(restore_version, recipe_path.c_str())){
+            printf("Version %d not exist!\n", restore_version);
+            return 0;
+        }
         
-    //     // save metadata entry
-    //     GlobalMetadataManagerPtr->save();
+        unsigned char* assembling_buffer = (unsigned char*)malloc(FILE_CACHE);
 
-    // }else if(Config::getInstance().getTaskType() == TASK_RESTORE){
-    //     // 如果写时使用DeltaDedup，那么恢复时参数也需要指定DeltaDedup
-    //     int restore_version = Config::getInstance().getRestoreVersion();
-    //     string recipe_path = Config::getInstance().getFileRecipesPath();
+        memset(assembling_buffer, 0, FILE_CACHE);
+        int write_buffer_offset = 0;
+        uint64_t restored_size = 0;
+        uint64_t container_read_count = 0;
 
-    //     int current_version = getFilesNum(recipe_path.c_str());
-    //     if(current_version != 0){
-    //         if(Config::getInstance().isDeltaDedup()){
-    //             if(Config::getInstance().getMinDR() == 0){
-    //                 GlobalMetadataManagerPtr->load(restore_version);
-    //             }else{
-    //                 GlobalMetadataManagerPtr->loadVersion(restore_version);
-    //             }
-    //         }else{
-    //             GlobalMetadataManagerPtr->load();
-    //         }
-    //     }
+        //recipe
+        std::vector<std::string> file_recipe = getFileRecipe(Config::getInstance().getRestoreVersion(),
+                                                             Config::getInstance().getFileRecipesPath().c_str());
 
-    //     struct timeval restore_time_start, restore_time_end;
-    //     gettimeofday(&restore_time_start, NULL);
+        //组装
+        RESTORE_METHOD rm = Config::getInstance().getRestoreMethod();
+        if(rm == CONTAINER_CACHE || rm == CHUNK_CACHE){
+            int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT, 0777);
+            if(fd < 0){
+                printf("无法写文件!!! %s\n", strerror(errno));
+                exit(-1);
+            }
 
-    //     if(!fileRecipeExist(restore_version, recipe_path.c_str())){
-    //         printf("Version %d not exist!\n", restore_version);
-    //         return 0;
-    //     }
-        
-    //     unsigned char* assembling_buffer = (unsigned char*)malloc(FILE_CACHE);
-
-    //     memset(assembling_buffer, 0, FILE_CACHE);
-    //     int write_buffer_offset = 0;
-    //     uint64_t restored_size = 0;
-    //     uint64_t container_read_count = 0;
-
-    //     //recipe
-    //     std::vector<std::string> file_recipe = getFileRecipe(Config::getInstance().getRestoreVersion(),
-    //                                                          Config::getInstance().getFileRecipesPath().c_str());
-
-    //     //组装
-    //     RESTORE_METHOD rm = Config::getInstance().getRestoreMethod();
-    //     if(rm == CONTAINER_CACHE || rm == CHUNK_CACHE){
-    //         int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT, 0777);
-    //         if(fd < 0){
-    //             printf("无法写文件!!! %s\n", strerror(errno));
-    //             exit(-1);
-    //         }
-
-    //         Cache* cc;
-    //         if(rm == CONTAINER_CACHE){
-    //             cc = new ContainerCache(Config::getInstance().getContainersPath().c_str(), Config::getInstance().getCacheSize());
-    //         }else if(rm == CHUNK_CACHE){
-    //             cc = new ChunkCache(Config::getInstance().getContainersPath().c_str(), 16*1024);
-    //         }
+            Cache* cc;
+            if(rm == CONTAINER_CACHE){
+                cc = new ContainerCache(Config::getInstance().getContainersPath().c_str(), Config::getInstance().getCacheSize());
+            }else if(rm == CHUNK_CACHE){
+                cc = new ChunkCache(Config::getInstance().getContainersPath().c_str(), 16*1024);
+            }
             
-    //         SHA1FP fp;
-    //         ENTRY_VALUE ev;
-    //         for(auto &x : file_recipe){
-    //             memcpy(&fp, x.data(), sizeof(SHA1FP));
-    //             ev = GlobalMetadataManagerPtr->getEntry(fp);
-    //             std::string ck_data = cc->getChunkData(ev);
+            SHA1FP fp;
+            ENTRY_VALUE ev;
+            for(auto &x : file_recipe){
+                memcpy(&fp, x.data(), sizeof(SHA1FP));
+                ev = GlobalMetadataManagerPtr->getEntry(fp);
+                std::string ck_data = cc->getChunkData(ev);
 
-    //             if(write_buffer_offset + ck_data.size() >= FILE_CACHE){
-    //                 flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
-    //                 write_buffer_offset = 0;
-    //             }
+                if(write_buffer_offset + ck_data.size() >= FILE_CACHE){
+                    flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
+                    write_buffer_offset = 0;
+                }
 
-    //             memcpy(assembling_buffer + write_buffer_offset, ck_data.data(), ck_data.size());
+                memcpy(assembling_buffer + write_buffer_offset, ck_data.data(), ck_data.size());
 
-    //             write_buffer_offset += ev.chunk_length;
-    //             restored_size += ev.chunk_length;
-    //         }
+                write_buffer_offset += ev.chunk_length;
+                restored_size += ev.chunk_length;
+            }
 
-    //         flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
-    //         container_read_count = cc->getContainerReadCount();
-    //         close(fd);
+            flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
+            container_read_count = cc->getContainerReadCount();
+            close(fd);
 
-    //     }else if(Config::getInstance().getRestoreMethod() == FAA_FIXED){
-    //         int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT, 0777);
-    //         if(fd < 0){
-    //             printf("无法写文件!!! %s\n", strerror(errno));
-    //             exit(-1);
-    //         }
+        }else if(Config::getInstance().getRestoreMethod() == FAA_FIXED){
+            int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT, 0777);
+            if(fd < 0){
+                printf("无法写文件!!! %s\n", strerror(errno));
+                exit(-1);
+            }
 
-    //         unsigned char* container_read_buffer = (unsigned char*)malloc(CONTAINER_SIZE);
-    //         memset(container_read_buffer, 0, CONTAINER_SIZE);
-    //         int buffered_CID = -1;
+            unsigned char* container_read_buffer = (unsigned char*)malloc(CONTAINER_SIZE);
+            memset(container_read_buffer, 0, CONTAINER_SIZE);
+            int buffered_CID = -1;
 
-    //         int recipe_offset = 0;
-    //         std::vector<recipe_buffer_entry> recipe_buffer;
-    //         int write_length_from_recipe_buffer = 0;
-    //         int faa_start = 0;
+            int recipe_offset = 0;
+            std::vector<recipe_buffer_entry> recipe_buffer;
+            int write_length_from_recipe_buffer = 0;
+            int faa_start = 0;
 
-    //         while(recipe_offset <= file_recipe.size()-1){
-    //             // 1.从文件recipe取一段截到recipe buffer
-    //             write_length_from_recipe_buffer = 0;
-    //             faa_start = 0;
-    //             recipe_buffer.clear();
-    //             for(; recipe_offset<=file_recipe.size()-1; recipe_offset++){
-    //                 SHA1FP fp;
-    //                 memcpy(&fp, file_recipe[recipe_offset].data(), sizeof(SHA1FP));
-    //                 ENTRY_VALUE ev = GlobalMetadataManagerPtr->getEntry(fp);
+            while(recipe_offset <= file_recipe.size()-1){
+                // 1.从文件recipe取一段截到recipe buffer
+                write_length_from_recipe_buffer = 0;
+                faa_start = 0;
+                recipe_buffer.clear();
+                for(; recipe_offset<=file_recipe.size()-1; recipe_offset++){
+                    SHA1FP fp;
+                    memcpy(&fp, file_recipe[recipe_offset].data(), sizeof(SHA1FP));
+                    ENTRY_VALUE ev = GlobalMetadataManagerPtr->getEntry(fp);
 
-    //                 if(write_length_from_recipe_buffer + ev.chunk_length <= FILE_CACHE){
-    //                     recipe_buffer.emplace_back(
-    //                         recipe_buffer_entry(ev.container_number, ev.chunk_length, ev.offset, faa_start, false));
-    //                     faa_start += ev.chunk_length;
-    //                     write_length_from_recipe_buffer += ev.chunk_length;
-    //                 }else{
-    //                     break;  
-    //                 }
-    //             }
+                    if(write_length_from_recipe_buffer + ev.chunk_length <= FILE_CACHE){
+                        recipe_buffer.emplace_back(
+                            recipe_buffer_entry(ev.container_number, ev.chunk_length, ev.offset, faa_start, false));
+                        faa_start += ev.chunk_length;
+                        write_length_from_recipe_buffer += ev.chunk_length;
+                    }else{
+                        break;  
+                    }
+                }
                 
-    //             // 2.根据recipe buffer填充assembling buffer
-    //             while(1){
-    //                 int flag = 0;
-    //                 for(auto &x : recipe_buffer){
-    //                     if(!x.used){
-    //                         buffered_CID = x.CID;
-    //                         FAA::loadContainer(buffered_CID, Config::getInstance().getContainersPath(), container_read_buffer);
-    //                         flag = 1;
-    //                         break;
-    //                     }
-    //                 }
-    //                 if(flag == 0) break;
+                // 2.根据recipe buffer填充assembling buffer
+                while(1){
+                    int flag = 0;
+                    for(auto &x : recipe_buffer){
+                        if(!x.used){
+                            buffered_CID = x.CID;
+                            FAA::loadContainer(buffered_CID, Config::getInstance().getContainersPath(), container_read_buffer);
+                            flag = 1;
+                            break;
+                        }
+                    }
+                    if(flag == 0) break;
 
-    //                 for(auto &x : recipe_buffer){
-    //                     if(!x.used){
-    //                         if(x.CID == buffered_CID){
-    //                             memcpy(assembling_buffer + x.faa_start, 
-    //                             container_read_buffer + x.container_offset, x.length);
-    //                             x.used = true;
+                    for(auto &x : recipe_buffer){
+                        if(!x.used){
+                            if(x.CID == buffered_CID){
+                                memcpy(assembling_buffer + x.faa_start, 
+                                container_read_buffer + x.container_offset, x.length);
+                                x.used = true;
 
-    //                             restored_size += x.length;
-    //                         }
-    //                     }
-    //                 }
-    //             }
+                                restored_size += x.length;
+                            }
+                        }
+                    }
+                }
 
-    //             // 3.当前recipe buffer已使用完，将faa刷入磁盘
-    //             flushAssemblingBuffer(fd, assembling_buffer, write_length_from_recipe_buffer);
-    //         }
+                // 3.当前recipe buffer已使用完，将faa刷入磁盘
+                flushAssemblingBuffer(fd, assembling_buffer, write_length_from_recipe_buffer);
+            }
 
-    //         close(fd);
-    //     }else{
-    //         printf("暂不支持的恢复算法 %d\n", Config::getInstance().getRestoreMethod());
-    //         exit(-1);
-    //     }
+            close(fd);
+        }else{
+            printf("暂不支持的恢复算法 %d\n", Config::getInstance().getRestoreMethod());
+            exit(-1);
+        }
 
-    //     gettimeofday(&restore_time_end, NULL);
-    //     uint64_t single_dedup_time_us = (restore_time_end.tv_sec - restore_time_start.tv_sec) * 1000000 + restore_time_end.tv_usec - restore_time_start.tv_usec;
-    //     float restore_throughput = (float)(restored_size) / MB / ((float)(single_dedup_time_us)/1000000);
-    //     float speed_factor = (float)(restored_size) / MB / ((float)container_read_count);
-    //     printf("-----------------------Restore statics----------------------\n");
-    //     printf("Restore size %" PRIu64 "\n",    restored_size);
-    //     printf("Restore Throughput %.2f MiB/s\n", restore_throughput);
-    //     printf("Speed factor %.2f\n", speed_factor);
-    // }else if(Config::getInstance().getTaskType() == TASK_DELETE){
-    //     // 仅实现固定DeltaDedup的删除
-    //     int delete_version = Config::getInstance().getDeleteVersion();
+        gettimeofday(&restore_time_end, NULL);
+        uint64_t single_dedup_time_us = (restore_time_end.tv_sec - restore_time_start.tv_sec) * 1000000 + restore_time_end.tv_usec - restore_time_start.tv_usec;
+        float restore_throughput = (float)(restored_size) / MB / ((float)(single_dedup_time_us)/1000000);
+        float speed_factor = (float)(restored_size) / MB / ((float)container_read_count);
+        printf("-----------------------Restore statics----------------------\n");
+        printf("Restore size %" PRIu64 "\n",    restored_size);
+        printf("Restore Throughput %.2f MiB/s\n", restore_throughput);
+        printf("Speed factor %.2f\n", speed_factor);
+    }else if(Config::getInstance().getTaskType() == TASK_DELETE){
+        // 仅实现固定DeltaDedup的删除
+        int delete_version = Config::getInstance().getDeleteVersion();
 
-    //     bool dd = Config::getInstance().isDeltaDedup();
-    //     if(!dd){
-    //         printf("暂不支持DeltaDedup以外的删除方案\n");
-    //         exit(-1);
-    //     }
+        bool dd = Config::getInstance().isDeltaDedup();
+        if(!dd){
+            printf("暂不支持DeltaDedup以外的删除方案\n");
+            exit(-1);
+        }
 
-    //     uint32_t base_size = Config::getInstance().getBaseSize();
-    //     uint32_t delta_num = Config::getInstance().getDeltaNum();
-    //     bool in_delta = (delete_version % (base_size + delta_num)) > (base_size-1);
-    //     if(in_delta){
-    //         deleteFile(delete_version, true);
+        uint32_t base_size = Config::getInstance().getBaseSize();
+        uint32_t delta_num = Config::getInstance().getDeltaNum();
+        bool in_delta = (delete_version % (base_size + delta_num)) > (base_size-1);
+        if(in_delta){
+            deleteFile(delete_version, true);
 
-    //         //如果连续删除，删掉最后一个delta版本之后，删除该版本对应的base
-    //         if(delete_version % (base_size+delta_num) == delta_num){
-    //             deleteFile(delete_version-delta_num, false);
-    //         }
-    //     }
+            //如果连续删除，删掉最后一个delta版本之后，删除该版本对应的base
+            if(delete_version % (base_size+delta_num) == delta_num){
+                deleteFile(delete_version-delta_num, false);
+            }
+        }
 
-    // }
-
+    }
     return 0;
 }

@@ -48,32 +48,6 @@ static void flushAssemblingBuffer(int fd, unsigned char* buf, int len){
     }
 }
 
-static void* fifo_restore_thread(void *arg) {
-	RESTORE_METHOD rm = Config::getInstance().getRestoreMethod();
-	Cache* cc;
-	if(rm == CONTAINER_CACHE){
-		cc = new ContainerCache(Config::getInstance().getContainersPath().c_str(), Config::getInstance().getCacheSize());
-	}else if(rm == CHUNK_CACHE){
-		cc = new ChunkCache(Config::getInstance().getContainersPath().c_str(), 16*1024);
-	}
-	
-	SHA1FP fp;
-	ENTRY_VALUE ev;
-	struct chunk *c = NULL;
-	while ((c = (struct chunk *)sync_queue_pop(restore_recipe_queue))){
-		memcpy(&fp, c->fp, sizeof(SHA1FP));
-		ev = GlobalMetadataManagerPtr->getEntry(fp);
-		c->size = ev.chunk_length;
-		c->id = ev.container_number;
-		std::string ck_data = cc->getChunkData(ev);
-		memcpy(c->data, ck_data.data(), sizeof(SHA1FP));
-		sync_queue_push(restore_chunk_queue, c);
-
-		jcr.data_size += ev.chunk_length;
-		jcr.chunk_num++;
-	}
-}
-
 
 static void* read_recipe_thread(void *arg) {
 	int restore_version = Config::getInstance().getRestoreVersion();
@@ -82,11 +56,11 @@ static void* read_recipe_thread(void *arg) {
 	int current_version = getFilesNum(recipe_path.c_str());
 	if(current_version != 0){
 		if(Config::getInstance().isDeltaDedup()){
-			if(Config::getInstance().getMinDR() == 0){
-				GlobalMetadataManagerPtr->load(restore_version);
-			}else{
-				GlobalMetadataManagerPtr->loadVersion(restore_version);
-			}
+			// if(Config::getInstance().getMinDR() == 0){
+			// 	GlobalMetadataManagerPtr->load(restore_version);
+			// }else{
+				GlobalMetadataManagerPtr->loadVersion(restore_version,true);
+			// }
 		}else{
 			GlobalMetadataManagerPtr->load();
 		}
@@ -99,10 +73,10 @@ static void* read_recipe_thread(void *arg) {
         exit(-1);
     }
 
-	struct chunk *c = new_chunk(recipe_name.size()+1);
-	strcpy((char*)c->data, recipe_name.data());
-	SET_CHUNK(c, CHUNK_FILE_START);
-	sync_queue_push(restore_recipe_queue, c);
+	// struct chunk *c = new_chunk(recipe_name.size()+1);
+	// strcpy((char*)c->data, recipe_name.data());
+	// SET_CHUNK(c, CHUNK_FILE_START);
+	// sync_queue_push(restore_recipe_queue, c);
     
 	char fp_buf[SHA_DIGEST_LENGTH]={0};
     while(1){
@@ -120,11 +94,42 @@ static void* read_recipe_thread(void *arg) {
     }
     close(fd);
 
-	c = new_chunk(0);
-	SET_CHUNK(c, CHUNK_FILE_END);
-	sync_queue_push(restore_recipe_queue, c);
+	// c = new_chunk(0);
+	// SET_CHUNK(c, CHUNK_FILE_END);
+	// sync_queue_push(restore_recipe_queue, c);
 
 	sync_queue_term(restore_recipe_queue);
+	return NULL;
+}
+
+static void* fifo_restore_thread(void *arg) {
+	RESTORE_METHOD rm = Config::getInstance().getRestoreMethod();
+	Cache* cc;
+	if(rm == CONTAINER_CACHE){
+		cc = new ContainerCache(Config::getInstance().getContainersPath().c_str(), Config::getInstance().getCacheSize());
+	}else if(rm == CHUNK_CACHE){
+		cc = new ChunkCache(Config::getInstance().getContainersPath().c_str(), 16*1024);
+	}
+	
+	SHA1FP fp;
+	ENTRY_VALUE ev;
+	struct chunk *temp = NULL;
+	while ((temp = (struct chunk *)sync_queue_pop(restore_recipe_queue))){
+		memcpy(&fp, temp->fp, sizeof(SHA1FP));
+		ev = GlobalMetadataManagerPtr->getEntry(fp);
+		struct chunk *c = new_chunk(ev.chunk_length);
+		c->size = ev.chunk_length;
+		c->id = ev.container_number;
+		std::string ck_data = cc->getChunkData(ev);
+		memcpy(c->data, ck_data.data(), sizeof(SHA1FP));
+		sync_queue_push(restore_chunk_queue, c);
+
+		jcr.data_size += ev.chunk_length;
+		jcr.chunk_num++;
+		free_chunk(temp);
+	}
+
+	sync_queue_term(restore_chunk_queue);
 	return NULL;
 }
 
@@ -141,7 +146,7 @@ void* write_restore_data(void* arg) {
 	}
 
 	struct chunk *c = NULL;
-	while ((c = (struct chunk *)sync_queue_pop(restore_recipe_queue))){
+	while ((c = (struct chunk *)sync_queue_pop(restore_chunk_queue))){
 		if(write_buffer_offset + c->size >= FILE_CACHE){
 			flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
 			write_buffer_offset = 0;
@@ -150,18 +155,22 @@ void* write_restore_data(void* arg) {
 		memcpy(assembling_buffer + write_buffer_offset, c->data, c->size);
 
 		write_buffer_offset += c->size;
+		free_chunk(c);
 	}
 	flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
+	
 	close(fd);
 
     jcr.status = JCR_STATUS_DONE;
     return NULL;
 }
 
-void do_restore() {
-	restore_chunk_queue = sync_queue_new(100);
+void do_restore() {  
+    restore_chunk_queue = sync_queue_new(100);
 	restore_recipe_queue = sync_queue_new(100);
 
+	struct timeval restore_time_start, restore_time_end;
+	gettimeofday(&restore_time_start, NULL);
     jcr.status = JCR_STATUS_RUNNING;
 	pthread_t recipe_t, read_t, write_t;
 	pthread_create(&recipe_t, NULL, read_recipe_thread, NULL);
@@ -175,5 +184,17 @@ void do_restore() {
 	}
 
 	pthread_create(&write_t, NULL, write_restore_data, NULL);
+
+	do{
+        sleep(1);
+        /*time_t now = time(NULL);*/
+        // fprintf(stderr, "%" PRId64 " bytes, %" PRId32 " chunks, %d files processed\r", 
+        //         jcr.data_size, jcr.chunk_num, jcr.file_num);
+    }while(jcr.status == JCR_STATUS_RUNNING || jcr.status != JCR_STATUS_DONE);
+    gettimeofday(&restore_time_end, NULL);
+	jcr.total_time = (restore_time_end.tv_sec - restore_time_start.tv_sec) * 1000000 + 
+										restore_time_end.tv_usec - restore_time_start.tv_usec;
+	printf("throughput(MB/s): %.2f\n",
+		(double) jcr.data_size * 1000000 / (1024 * 1024 * jcr.total_time));
 }
 

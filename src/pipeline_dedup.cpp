@@ -35,8 +35,32 @@ static uint32_t getFilesNum(const char* dirPath){
     return ans-2;
 }
 
+// 获取文件版本
+static int getVersion(const char* dirPath, const std::string& prefix){
+    std::vector<int> recipe_numbers;
+    std::regex recipe_pattern(prefix + R"((\d+))");
+
+    // 遍历文件夹中的文件
+    for (const auto& entry : fs::directory_iterator(dirPath)) {
+        std::string filename = entry.path().filename().string();
+        std::smatch match;
+        if (std::regex_search(filename, match, recipe_pattern)) {
+            int number = std::stoi(match[1].str());
+            recipe_numbers.push_back(number);
+        }
+    }
+
+    // 找到最大的数字
+    if (!recipe_numbers.empty()) {
+        int last_recipe_number = *std::max_element(recipe_numbers.begin(), recipe_numbers.end());
+        return last_recipe_number+1;
+    } else {
+        return 0;
+    }
+}
+
 static void saveFileRecipe(std::vector<std::string> file_recipe, const char* fileRecipesPath){
-    int n_version = getFilesNum(fileRecipesPath);
+    int n_version = getVersion(fileRecipesPath,"recipe");
     std::string recipe_name(fileRecipesPath);
     recipe_name.append("/recipe");
     recipe_name.append(std::to_string(n_version));
@@ -71,33 +95,10 @@ static void resetContainerBuf(){
 	container_inner_index = 0;
 }
 
-// 获取文件版本
-static int getVersion(const char* dirPath, const std::string& prefix){
-    std::vector<int> recipe_numbers;
-    std::regex recipe_pattern(prefix + R"((\d+))");
-
-    // 遍历文件夹中的文件
-    for (const auto& entry : fs::directory_iterator(dirPath)) {
-        std::string filename = entry.path().filename().string();
-        std::smatch match;
-        if (std::regex_search(filename, match, recipe_pattern)) {
-            int number = std::stoi(match[1].str());
-            recipe_numbers.push_back(number);
-        }
-    }
-
-    // 找到最大的数字
-    if (!recipe_numbers.empty()) {
-        int last_recipe_number = *std::max_element(recipe_numbers.begin(), recipe_numbers.end());
-        return last_recipe_number+1;
-    } else {
-        return 0;
-    }
-}
 
 void *dedup_thread(void *arg) {
 	container_buf = (unsigned char*)malloc(CONTAINER_SIZE);
-	container_index = getFilesNum(Config::getInstance().getContainersPath().c_str());
+	container_index = getVersion(Config::getInstance().getContainersPath().c_str(),"container");
 	containers_path = Config::getInstance().getContainersPath();
 
 	container_inner_offset = 0;

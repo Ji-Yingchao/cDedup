@@ -28,4 +28,6 @@ void stop_hash_phase();
 void start_dedup_phase();
 void stop_dedup_phase();
 
+void do_restore();
+
 #endif 

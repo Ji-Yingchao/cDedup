@@ -116,23 +116,6 @@ string MetadataManager::genFPname(int version, bool base){
     return fp_name;
 }
 
-int MetadataManager::load(int restore_version){
-    // 如果这个版本是base，那么只需加载base的fp
-    // 如果这个版本是delta，那么需要加载它前面一个base的fp和它自己的fp
-    int delta_num = Config::getInstance().getDeltaNum();
-
-    // 因为现在默认base size是1，所以是delta_num + 1
-    if(restore_version % (delta_num + 1) == 0){
-        // 仅仅需要加载base fp
-        loadDeltaDedupFp(genFPname(restore_version, true));
-    }else{
-        // 需要加载base 和 delta的fp
-        int base_pos = restore_version - (restore_version % (delta_num + 1));
-        loadDeltaDedupFp(genFPname(base_pos, true));
-        loadDeltaDedupFp(genFPname(restore_version, false));
-    }
-}
-
 
 std::string getFPname(const std::string& partial_name) {
     for (const auto& entry : fs::recursive_directory_iterator
@@ -185,9 +168,10 @@ std::string findBaseFile(const std::string& delta_file) {
     return "";
 }
 
-int MetadataManager::loadVersion(int restore_version){
+// 通过文件名加载元数据
+int MetadataManager::loadVersion(int version, bool is_restore){
     std::string fp_name("fp_");
-    fp_name.append(std::to_string(restore_version));
+    fp_name.append(std::to_string(version));
     fp_name.append("_");
     fp_name = getFPname(fp_name);
     if(fp_name.empty()){
@@ -197,16 +181,18 @@ int MetadataManager::loadVersion(int restore_version){
     
     size_t pos = fp_name.find_last_of('/');
     if(fp_name.substr(pos + 1).find("base") != std::string::npos){
-        loadDeltaDedupFp(fp_name);
+        loadDeltaDedupFp(fp_name,is_restore);
     }else{
-        // 查找该delta的base
+        // 如果是写入加载元数据，不需要加载delta版本的fp
         string base_file = findBaseFile(fp_name);
-        loadDeltaDedupFp(base_file);
-        loadDeltaDedupFp(fp_name);
+        loadDeltaDedupFp(base_file,is_restore);
+        if(is_restore){
+            loadDeltaDedupFp(fp_name,is_restore);
+        }
     }
 }
 
-void MetadataManager::loadDeltaDedupFp(std::string fp_name){
+void MetadataManager::loadDeltaDedupFp(std::string fp_name, bool is_restore){
     printf("-----------------------Loading FP-index DeltaDedup-----------------------\n");
     printf("Loading index: %s\n", fp_name.c_str());
 
@@ -226,7 +212,12 @@ void MetadataManager::loadDeltaDedupFp(std::string fp_name){
         memcpy(&tmp_fp, metadata_cache+i*meta_size, sizeof(SHA1FP));
         memcpy(&tmp_value, metadata_cache+i*meta_size + sizeof(SHA1FP), sizeof(ENTRY_VALUE));
 
-        this->fp_table_origin.emplace(tmp_fp, tmp_value);
+        if(is_restore){
+            this->fp_table_origin.emplace(tmp_fp, tmp_value);
+        }else{
+            this->fp_table_base.emplace(tmp_fp, tmp_value);
+        }
+        
     }
 
     close(fd);
@@ -343,3 +334,20 @@ int MetadataManager::addRefCnt(const SHA1FP sha1){
 ENTRY_VALUE MetadataManager::getEntry(const SHA1FP sha1){
     return this->fp_table_origin[sha1];
 }
+
+// int MetadataManager::load(int restore_version){
+//     // 如果这个版本是base，那么只需加载base的fp
+//     // 如果这个版本是delta，那么需要加载它前面一个base的fp和它自己的fp
+//     int delta_num = Config::getInstance().getDeltaNum();
+
+//     // 因为现在默认base size是1，所以是delta_num + 1
+//     if(restore_version % (delta_num + 1) == 0){
+//         // 仅仅需要加载base fp
+//         loadDeltaDedupFp(genFPname(restore_version, true));
+//     }else{
+//         // 需要加载base 和 delta的fp
+//         int base_pos = restore_version - (restore_version % (delta_num + 1));
+//         loadDeltaDedupFp(genFPname(base_pos, true));
+//         loadDeltaDedupFp(genFPname(restore_version, false));
+//     }
+// }

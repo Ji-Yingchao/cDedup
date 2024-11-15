@@ -50,8 +50,8 @@ class MetadataManager {
 
         int save();
         int load();
-        int load(int restore_version);
-        int loadVersion(int restore_version);
+        // int load(int restore_version);
+        int loadVersion(int version, bool is_restore);
         //暂不支持中断打桩写入，只支持目录批量一次性写入，所以没有对应的load函数
         int save(int, int, int);
         int saveVersion(int, bool, bool);
@@ -62,7 +62,7 @@ class MetadataManager {
         int addRefCnt(const SHA1FP sha1);
         ENTRY_VALUE getEntry(const SHA1FP sha1);
         std::string genFPname(int version, bool base);
-        void loadDeltaDedupFp(std::string fp_name);
+        void loadDeltaDedupFp(std::string fp_name, bool is_restore);
 
     private:
         std::string metadata_file_path;
