@@ -99,8 +99,6 @@ int MetadataManager::saveVersion(int current_version, bool in_delta, bool clear_
     }
 
     fp_table_delta.clear();
-
-    //printf("total item %d\n", count);
     close(fd);
     return 0;
 }
@@ -168,8 +166,10 @@ std::string findBaseFile(const std::string& delta_file) {
     return "";
 }
 
-// 通过文件名加载元数据
+// 通过文件名加载指纹数据
 int MetadataManager::loadVersion(int version, bool is_restore){
+    // 恢复时：如果该版本是base，只需加载base的fp；如果该版本是delta，需要加载它前面一个base的fp和它自己的fp
+    // 写入时：如果该版本是base，不需要加载fp；如果该版本是delta，需要加载它前面一个base的fp
     std::string fp_name("fp_");
     fp_name.append(std::to_string(version));
     fp_name.append("_");
@@ -181,6 +181,7 @@ int MetadataManager::loadVersion(int version, bool is_restore){
     
     size_t pos = fp_name.find_last_of('/');
     if(fp_name.substr(pos + 1).find("base") != std::string::npos){
+        // printf("Length of fp_table_origin: %d\n", this->fp_table_origin.size());
         loadDeltaDedupFp(fp_name,is_restore);
     }else{
         // 如果是写入加载元数据，不需要加载delta版本的fp
@@ -216,8 +217,7 @@ void MetadataManager::loadDeltaDedupFp(std::string fp_name, bool is_restore){
             this->fp_table_origin.emplace(tmp_fp, tmp_value);
         }else{
             this->fp_table_base.emplace(tmp_fp, tmp_value);
-        }
-        
+        }  
     }
 
     close(fd);

@@ -156,41 +156,6 @@ std::vector<std::string> getFileRecipe(uint8_t restore_version, const char* file
     return ans;
 }
 
-//获取该元数据所有ContainerId
-std::vector<uint32_t> getContainerIds(std::string fp_name, uint64_t file_size){
-    unsigned char* metadata_cache = (unsigned char*)malloc(FILE_CACHE);
-    int fd = open(fp_name.c_str(), O_RDONLY);
-    if(fd < 0)
-        printf("MetadataManager::load error\n");
-    
-    int n = read(fd, metadata_cache, FILE_CACHE);
-    int meta_size = sizeof(SHA1FP) + sizeof(ENTRY_VALUE);
-    int entry_count = n/meta_size;
-    ENTRY_VALUE tmp_value;
-    std::vector<uint32_t> ans;
-
-    //统计存储大小
-    uint64_t stored_size = 0;
-
-    for(int i=0; i<=entry_count-1; i++){
-        memcpy(&tmp_value, metadata_cache+i*meta_size + sizeof(SHA1FP), sizeof(ENTRY_VALUE));
-        stored_size += tmp_value.chunk_length;
-        auto it = std::find(ans.begin(), ans.end(), tmp_value.container_number);
-        if(it == ans.end()){
-            ans.push_back(tmp_value.container_number);
-        }
-    }
-
-    printf("stored container size %.2fGB", (float)(ans.size()*CONTAINER_SIZE)/GB);
-    printf("stored size %.2fGB", (float)(stored_size)/GB);
-    
-    // 用于统计重删率
-    bj.dedup_size = bj.dedup_size - file_size + stored_size;
-    
-    close(fd);
-    free(metadata_cache);
-    return ans;
-}
 
 void saveContainer(int container_index, unsigned char* container_buf, unsigned int len, const char* containersPath){
     std::string container_name(containersPath);
@@ -229,8 +194,10 @@ void saveChunkToContainer(unsigned int& container_buf_pointer, unsigned char* co
 void flushAssemblingBuffer(int fd, unsigned char* buf, int len){
     if(write(fd, buf, len) != len){
         printf("Restore, write file error!!!\n");
+        std::cerr << "write failed: " << strerror(errno) << std::endl;
         exit(-1);
     }
+    // fsync(fd);
     //close(fd);
 }
 
@@ -264,12 +231,178 @@ void initChunkingAlgorithm(){
     }
 }
 
+std::vector<fs::path> traverseDirectory(const fs::path& directory) {
+    try {
+        std::vector<fs::path> files;
+
+        // 遍历目录
+        for (const auto& entry : fs::directory_iterator(directory)) {
+            if (fs::is_regular_file(entry)) {
+                files.push_back(entry.path());
+            } else if (fs::is_directory(entry)) {
+                traverseDirectory(entry.path());
+            }
+        }
+
+        return files;
+    } catch (const std::exception& ex) {
+        std::cerr << "Error: " << ex.what() << std::endl;
+    }
+}
+
+// uint64_t getFileSize(int version){
+//     std::vector<std::string> file_recipe = getFileRecipe(version,Config::getInstance().getFileRecipesPath().c_str());
+//     // GlobalMetadataManagerPtr->load(version);
+//     if(Config::getInstance().isDeltaDedup()){
+//         GlobalMetadataManagerPtr->loadVersion(version,true);
+//     }else{
+//         GlobalMetadataManagerPtr->load();
+//     }
+    
+//     uint64_t file_size = 0;
+//     SHA1FP fp;
+//     ENTRY_VALUE ev;
+//     for(auto &x : file_recipe){
+//         memcpy(&fp, x.data(), sizeof(SHA1FP));
+//         ev = GlobalMetadataManagerPtr->getEntry(fp);
+//         file_size += ev.chunk_length;
+//     }
+//     //printf("file size %.2fGB", (float)(file_size)/GB);
+//     return file_size;
+// }
+
+//获取该元数据所有ContainerId
+std::vector<uint32_t> getContainerIds(std::string fp_name, uint64_t file_size){
+    unsigned char* metadata_cache = (unsigned char*)malloc(FILE_CACHE);
+    int fd = open(fp_name.c_str(), O_RDONLY);
+    if(fd < 0){
+        printf("Open file %s failed\n", fp_name);
+        exit(-1);
+    }
+    
+    int n = read(fd, metadata_cache, FILE_CACHE);
+    int meta_size = sizeof(SHA1FP) + sizeof(ENTRY_VALUE);
+    int entry_count = n/meta_size;
+    ENTRY_VALUE tmp_value;
+    std::vector<uint32_t> ans;
+
+    //统计存储大小
+    uint64_t stored_size = 0;
+
+    for(int i=0; i<=entry_count-1; i++){
+        memcpy(&tmp_value, metadata_cache+i*meta_size + sizeof(SHA1FP), sizeof(ENTRY_VALUE));
+        stored_size += tmp_value.chunk_length;
+        auto it = std::find(ans.begin(), ans.end(), tmp_value.container_number);
+        if(it == ans.end()){
+            ans.push_back(tmp_value.container_number);
+        }
+    }
+
+    printf("stored container size %.2fGB\n", (float)(ans.size()*CONTAINER_SIZE)/GB);
+    printf("stored size %.2fGB\n", (float)(stored_size)/GB);
+    
+    // 用于统计重删率
+    bj.dedup_size = bj.dedup_size - file_size + stored_size;
+    
+    close(fd);
+    free(metadata_cache);
+    return ans;
+}
+
+void deleteFile(int delete_version,bool in_delta){
+    string recipe_path = Config::getInstance().getFileRecipesPath();
+    if(!fileRecipeExist(delete_version, recipe_path.c_str())){
+        printf("Version %d not exist!\n", delete_version);
+        exit(-1);
+    }
+    printf("-------------Begin to delete file version %d-----------\n",delete_version);
+    struct timeval delete_time_start, delete_time_end;  
+    gettimeofday(&delete_time_start, NULL);
+
+    
+    std::vector<std::string> file_recipe = getFileRecipe(delete_version,
+                                                        Config::getInstance().getFileRecipesPath().c_str());
+    uint64_t file_size = 0;
+    
+    std::string fp_name;
+    if(Config::getInstance().isDeltaDedup()){
+        GlobalMetadataManagerPtr->loadVersion(delete_version,true);
+        SHA1FP fp;
+        ENTRY_VALUE ev;
+        for(auto &x : file_recipe){
+            memcpy(&fp, x.data(), sizeof(SHA1FP));
+            ev = GlobalMetadataManagerPtr->getEntry(fp);
+            file_size += ev.chunk_length;
+        }
+
+        fp_name = GlobalMetadataManagerPtr->genFPname(delete_version, !in_delta);
+        std::vector<uint32_t> ids = getContainerIds(fp_name, file_size);
+        for(auto &id: ids){
+            //移除container
+            uint32_t container_index = id;
+            std::string container_name(Config::getInstance().getContainersPath().c_str());
+            container_name.append("/container");
+            container_name.append(std::to_string(container_index));
+            remove(container_name.c_str());  
+        }
+        //移除fingerprint
+        remove(fp_name.c_str());
+    }else{
+        //普通重删的删除未实现
+        fp_name = Config::getInstance().getFingerprintsFilePath().c_str();
+        printf("其他方案的删除尚未实现\n");
+        exit(-1);
+    }
+
+    //移除recipe
+    std::string recipe_name(recipe_path);
+    recipe_name.append("/recipe");
+    recipe_name.append(std::to_string(delete_version));
+    remove(recipe_name.c_str());
+    
+    bj.sum_size = bj.sum_size - file_size;
+    gettimeofday(&delete_time_end, NULL);
+
+    uint64_t single_delete_time_us = (delete_time_end.tv_sec - delete_time_start.tv_sec) * 1000000 + 
+                                        delete_time_end.tv_usec - delete_time_start.tv_usec;
+    printf("Delete time %.2f s\n",(float)(single_delete_time_us)/1000000);
+}
+
+// 保留最近n个版本的删除
+void do_delete(int current_version){
+    int retain_version_number = Config::getInstance().getRetainVersionNumber();
+    if(retain_version_number>=0 && current_version >= retain_version_number){
+        int delete_version = current_version - Config::getInstance().getRetainVersionNumber();
+
+        // DeltaDedup和普通删除不同
+        if(Config::getInstance().isDeltaDedup()){
+            uint32_t base_size = Config::getInstance().getBaseSize();
+            uint32_t delta_num = Config::getInstance().getDeltaNum();
+            bool in_delta = (delete_version % (base_size + delta_num)) > (base_size-1);
+            
+            if(in_delta){
+                deleteFile(delete_version, true);
+                //如果连续删除，删掉最后一个delta版本之后，删除该版本对应的base
+                if(delete_version % (base_size+delta_num) == delta_num){
+                    deleteFile(delete_version-delta_num, false);
+                }
+            }
+        }else{
+            deleteFile(delete_version,true);
+        }
+        
+    }
+}
+
 void writeFile(string path){
     int idf = open(path.c_str(), O_RDONLY, 0777);
     if(idf < 0){
         printf("open file error, id %d, %s\n", errno, strerror(errno));
         exit(-1);
     }
+
+    struct timeval backup_time_start, backup_time_end;  
+    gettimeofday(&backup_time_start, NULL);
 
     unsigned char* file_cache = (unsigned char*)malloc(FILE_CACHE);
     struct SHA1FP sha1_fp;
@@ -396,8 +529,13 @@ void writeFile(string path){
     // printf("Sum chunks %" PRIu64 "\n",    sum_chunks);
     // printf("Sum size %" PRIu64 "\n",    sum_size);
     // printf("Unique chunks %" PRIu64 "\n",    sum_chunks - dedup_chunks);
+    gettimeofday(&backup_time_end, NULL);
+    uint64_t single_dedup_time_us = (backup_time_end.tv_sec - backup_time_start.tv_sec) * 1000000 + 
+                                         backup_time_end.tv_usec - backup_time_start.tv_usec;
+    float throughput = (float)(sum_size) / MB / ((float)(single_dedup_time_us)/1000000);
+    printf("throughput(MB/s): %.2f\n",    throughput);
+    
     double cur_dr = double(dedup_size) / double(sum_size);
-    // printf("%.2f%\n",     double(dedup_size) / double(sum_size) *100);
     printf("Dedup Ratio %.2f% \n",     double(dedup_size) / double(sum_size) *100);
 
     // update backup job
@@ -414,100 +552,11 @@ void writeFile(string path){
         clear_base = (cur_dr < (double)min_dr/100) && in_delta;
         GlobalMetadataManagerPtr->saveVersion(current_version, in_delta, clear_base);
     }
+    do_delete(current_version);
 
     // free 
     close(idf);
     free(file_cache);
-}
-
-std::vector<fs::path> traverseDirectory(const fs::path& directory) {
-    try {
-        std::vector<fs::path> files;
-
-        // 遍历目录
-        for (const auto& entry : fs::directory_iterator(directory)) {
-            if (fs::is_regular_file(entry)) {
-                files.push_back(entry.path());
-            } else if (fs::is_directory(entry)) {
-                traverseDirectory(entry.path());
-            }
-        }
-
-        return files;
-    } catch (const std::exception& ex) {
-        std::cerr << "Error: " << ex.what() << std::endl;
-    }
-}
-
-uint64_t getFileSize(int version){
-    std::vector<std::string> file_recipe = getFileRecipe(version,Config::getInstance().getFileRecipesPath().c_str());
-    // GlobalMetadataManagerPtr->load(version);
-    GlobalMetadataManagerPtr->loadVersion(version,true);
-    uint64_t file_size = 0;
-    SHA1FP fp;
-    ENTRY_VALUE ev;
-    for(auto &x : file_recipe){
-        memcpy(&fp, x.data(), sizeof(SHA1FP));
-        ev = GlobalMetadataManagerPtr->getEntry(fp);
-        file_size += ev.chunk_length;
-    }
-    printf("file size %.2fGB", (float)(file_size)/GB);
-    return file_size;
-}
-
-void deleteFile(int delete_version,bool in_delta){
-    string recipe_path = Config::getInstance().getFileRecipesPath();
-    if(!fileRecipeExist(delete_version, recipe_path.c_str())){
-        printf("Version %d not exist!\n", delete_version);
-        exit(-1);
-    }
-    printf("-------------Begin to delete file version %d-----------\n",delete_version);
-    struct timeval delete_time_start, delete_time_end;  
-    gettimeofday(&delete_time_start, NULL);
-
-    uint64_t file_size = getFileSize(delete_version);
-    std::string fp_name = GlobalMetadataManagerPtr->genFPname(delete_version, !in_delta);
-    std::vector<uint32_t> ids = getContainerIds(fp_name, file_size);
-    for(auto &id: ids){
-        //移除container
-        uint32_t container_index = id;
-        std::string container_name(Config::getInstance().getContainersPath().c_str());
-        container_name.append("/container");
-        container_name.append(std::to_string(container_index));
-        remove(container_name.c_str());  
-    }
-
-    //移除recipe和fingerprint
-    std::string recipe_name(recipe_path);
-    recipe_name.append("/recipe");
-    recipe_name.append(std::to_string(delete_version));
-    remove(recipe_name.c_str());
-    remove(fp_name.c_str());
-
-    bj.sum_size = bj.sum_size - file_size;
-    gettimeofday(&delete_time_end, NULL);
-    uint64_t single_delete_time_us = (delete_time_end.tv_sec - delete_time_start.tv_sec) * 1000000 + 
-                                         delete_time_end.tv_usec - delete_time_start.tv_usec;
-    printf("Delete time %.2f s\n",(float)(single_delete_time_us)/1000000);
-}
-
-// DeltaDedup连续版本的删除
-void do_delete(int current_version){
-    int retain_version_number = Config::getInstance().getRetainVersionNumber();
-    if(retain_version_number>=0 && current_version >= retain_version_number){
-        int delete_version = current_version - Config::getInstance().getRetainVersionNumber();
-        uint32_t base_size = Config::getInstance().getBaseSize();
-        uint32_t delta_num = Config::getInstance().getDeltaNum();
-        bool in_delta = (delete_version % (base_size + delta_num)) > (base_size-1);
-        
-        if(in_delta){
-            deleteFile(delete_version, true);
-            //如果连续删除，删掉最后一个delta版本之后，删除该版本对应的base
-            if(delete_version % (base_size+delta_num) == delta_num){
-                deleteFile(delete_version-delta_num, false);
-            }
-        }
-    }
 }
 
 void traverseWriteDirectory(const fs::path& directory) {
@@ -522,7 +571,7 @@ void traverseWriteDirectory(const fs::path& directory) {
         for (const auto& path : files){
             writeFile(path);
 
-            do_delete(i);
+            //do_delete(i);
             i++;
             printf("Actual DR %.4f \n", double(bj.sum_size) / double(bj.sum_size - bj.dedup_size) );
         }
@@ -606,17 +655,10 @@ int main(int argc, char** argv){
         int restore_version = Config::getInstance().getRestoreVersion();
         string recipe_path = Config::getInstance().getFileRecipesPath();
 
-        int current_version = getFilesNum(recipe_path.c_str());
-        if(current_version != 0){
-            if(Config::getInstance().isDeltaDedup()){
-                // if(Config::getInstance().getMinDR() == 0){
-                //     GlobalMetadataManagerPtr->load(restore_version);
-                // }else{
-                GlobalMetadataManagerPtr->loadVersion(restore_version,true);
-                // }
-            }else{
-                GlobalMetadataManagerPtr->load();
-            }
+        if(Config::getInstance().isDeltaDedup()){ 
+            GlobalMetadataManagerPtr->loadVersion(restore_version,true);
+        }else{
+            GlobalMetadataManagerPtr->load();
         }
 
         struct timeval restore_time_start, restore_time_end;
@@ -626,8 +668,10 @@ int main(int argc, char** argv){
             printf("Version %d not exist!\n", restore_version);
             return 0;
         }
-        
+
         unsigned char* assembling_buffer = (unsigned char*)malloc(FILE_CACHE);
+        // unsigned char* assembling_buffer;
+        // posix_memalign((void**)&assembling_buffer, SECTOR_SIZE, FILE_CACHE);
 
         memset(assembling_buffer, 0, FILE_CACHE);
         int write_buffer_offset = 0;
@@ -653,7 +697,7 @@ int main(int argc, char** argv){
             }else if(rm == CHUNK_CACHE){
                 cc = new ChunkCache(Config::getInstance().getContainersPath().c_str(), 16*1024);
             }
-            
+
             SHA1FP fp;
             ENTRY_VALUE ev;
             for(auto &x : file_recipe){

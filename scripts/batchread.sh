@@ -2,16 +2,16 @@
 
 
 # 恢复，一次测
-# folder_path="/home/jyc/ssd/restore/restore"
-# for i in {0..90};
-# do
-#     full_path=$folder_path$i
-#     jq --arg full_path "$full_path" '.RestorePath = $full_path' ../conf/readExample.json > ../conf/temp.json
-#     mv ../conf/temp.json ../conf/readExample.json
-#     jq ".RestoreVersion = ${i}" ../conf/readExample.json > ../conf/temp.json 
-#     mv ../conf/temp.json ../conf/readExample.json
-#     ../cDedup ../conf/readExample.json | grep "restore throughput" | awk '{print $3}'
-# done
+folder_path="/home/jyc/ssd/restore/restore"
+for i in {0..90};
+do
+    full_path=$folder_path$i
+    jq --arg full_path "$full_path" '.RestorePath = $full_path' ../conf/readExample.json > ../conf/temp.json
+    mv ../conf/temp.json ../conf/readExample.json
+    jq ".RestoreVersion = ${i}" ../conf/readExample.json > ../conf/temp.json 
+    mv ../conf/temp.json ../conf/readExample.json
+    ../cDedup ../conf/readExample.json | grep "Restore Throughput" | awk '{print $3}'
+done
 
 
 # 恢复，备份一个恢复一个
@@ -32,6 +32,6 @@ do
     mv ../conf/temp.json ../conf/readExample.json
     jq ".RestoreVersion = ${i}" ../conf/readExample.json > ../conf/temp.json 
     mv ../conf/temp.json ../conf/readExample.json
-    ../cDedup ../conf/readExample.json | grep "Restore Throughput" | awk '{print $3}'
+    ../cDedup ../conf/readExample.json | grep "Speed factor" | awk '{print $3}'
     ((i++))
 done

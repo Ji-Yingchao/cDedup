@@ -1,7 +1,7 @@
 #!/bin/bash
 # 这里的配置需要和参数json一致
 
-BACK_DIR=/home/jyc/hdd/linux/working/
+BACK_DIR=/home/jyc/hdd/deltaworking/
 rm -rf ${BACK_DIR}
 mkdir ${BACK_DIR}
 mkdir ${BACK_DIR}/Containers

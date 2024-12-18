@@ -5,7 +5,8 @@
 #include<vector>
 #include<queue>
 
-#define SECTOR_SIZE (512)
+// #define SECTOR_SIZE (512)
+#define SECTOR_SIZE (4096)
 class ContainerCache : public Cache{
     public:
         ContainerCache(const char* containersPath, int cache_max_size){
