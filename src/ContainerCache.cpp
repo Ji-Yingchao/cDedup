@@ -19,6 +19,7 @@ std::string ContainerCache::getChunkData(ENTRY_VALUE ev){
 }
 
 void ContainerCache::loadContainer(int container_index){
+    struct timeval start1, end1,start2, end2;
     this->container_index_queue.push(container_index);
     this->container_index_set.insert(container_index);
     
@@ -28,7 +29,12 @@ void ContainerCache::loadContainer(int container_index){
     int fd = open(container_name.data(), O_RDONLY | O_DIRECT);
 
     memset(this->container_buf, 0, CONTAINER_SIZE);
+    gettimeofday(&start2, NULL);
     int n = read(fd, this->container_buf, CONTAINER_SIZE); // 可能塞不满
+    gettimeofday(&end2, NULL);
+    int tmp = (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
+    this->total_time2 += (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
+
     std::string content(this->container_buf , n);
 
     this->cache[container_index] = content;

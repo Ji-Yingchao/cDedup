@@ -162,7 +162,7 @@ void saveContainer(int container_index, unsigned char* container_buf, unsigned i
     container_name.append("/container");
     container_name.append(std::to_string(container_index));
     int fd = open(container_name.data(), O_RDWR | O_CREAT, 0777);
-    if(write(fd, container_buf, len) != len){
+    if(write(fd, container_buf, CONTAINER_SIZE) != CONTAINER_SIZE){
         printf("saveContainer write error, id %d, %s\n", errno, strerror(errno));
         exit(-1);
     }
@@ -669,9 +669,9 @@ int main(int argc, char** argv){
             return 0;
         }
 
-        unsigned char* assembling_buffer = (unsigned char*)malloc(FILE_CACHE);
-        // unsigned char* assembling_buffer;
-        // posix_memalign((void**)&assembling_buffer, SECTOR_SIZE, FILE_CACHE);
+        // unsigned char* assembling_buffer = (unsigned char*)malloc(FILE_CACHE);
+        unsigned char* assembling_buffer;
+        posix_memalign((void**)&assembling_buffer, SECTOR_SIZE, FILE_CACHE);
 
         memset(assembling_buffer, 0, FILE_CACHE);
         int write_buffer_offset = 0;
@@ -685,40 +685,57 @@ int main(int argc, char** argv){
         //组装
         RESTORE_METHOD rm = Config::getInstance().getRestoreMethod();
         if(rm == CONTAINER_CACHE || rm == CHUNK_CACHE){
-            int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT, 0777);
+            int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT| O_DIRECT, 0777);
             if(fd < 0){
                 printf("无法写文件!!! %s\n", strerror(errno));
                 exit(-1);
             }
 
+            // 计算花费时间（单位：秒）
+            double total_time1 = 0.0, total_time2 = 0.0, total_time3 = 0.0;
+            struct timeval start1, end1,start2, end2;
             Cache* cc;
             if(rm == CONTAINER_CACHE){
                 cc = new ContainerCache(Config::getInstance().getContainersPath().c_str(), Config::getInstance().getCacheSize());
             }else if(rm == CHUNK_CACHE){
                 cc = new ChunkCache(Config::getInstance().getContainersPath().c_str(), 16*1024);
             }
+            container_read_count = cc->getContainerReadCount();
+            printf("读容器的数量: %d\n", container_read_count);
 
             SHA1FP fp;
             ENTRY_VALUE ev;
             for(auto &x : file_recipe){
                 memcpy(&fp, x.data(), sizeof(SHA1FP));
                 ev = GlobalMetadataManagerPtr->getEntry(fp);
+                gettimeofday(&start2, NULL);
                 std::string ck_data = cc->getChunkData(ev);
 
+                gettimeofday(&end2, NULL);
+                total_time2 += (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
+                
                 if(write_buffer_offset + ck_data.size() >= FILE_CACHE){
-                    flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
+                    // flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
+                    flushAssemblingBuffer(fd, assembling_buffer, FILE_CACHE);
                     write_buffer_offset = 0;
                 }
-
                 memcpy(assembling_buffer + write_buffer_offset, ck_data.data(), ck_data.size());
 
                 write_buffer_offset += ev.chunk_length;
                 restored_size += ev.chunk_length;
             }
 
+            //o_direct需要对齐
+            if(write_buffer_offset/SECTOR_SIZE != 0){
+                write_buffer_offset =  ((write_buffer_offset + SECTOR_SIZE - 1) / SECTOR_SIZE) * SECTOR_SIZE;
+            }
             flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
             container_read_count = cc->getContainerReadCount();
             close(fd);
+            printf("代码段1总花费时间: %.6f 秒\n", cc->total_time1/1000000);
+            printf("代码段2总花费时间: %.6f 秒\n", cc->total_time2/1000000);
+            printf("选中代码段总花费时间: %.6f 秒\n", total_time2/1000000);
+            printf("读容器的数量: %d\n", container_read_count);
 
         }else if(Config::getInstance().getRestoreMethod() == FAA_FIXED){
             int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT, 0777);
@@ -796,6 +813,7 @@ int main(int argc, char** argv){
         uint64_t single_dedup_time_us = (restore_time_end.tv_sec - restore_time_start.tv_sec) * 1000000 + restore_time_end.tv_usec - restore_time_start.tv_usec;
         float restore_throughput = (float)(restored_size) / MB / ((float)(single_dedup_time_us)/1000000);
         float speed_factor = (float)(restored_size) / MB / ((float)container_read_count);
+        printf("RestoreTime: %.6f\n",    ((float)(single_dedup_time_us)/1000000));
         printf("-----------------------Restore statics----------------------\n");
         printf("Restore size %" PRIu64 "\n",    restored_size);
         printf("Restore Throughput %.2f MiB/s\n", restore_throughput);

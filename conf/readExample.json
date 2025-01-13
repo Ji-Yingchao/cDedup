@@ -9,7 +9,7 @@
   "fingerprintsFilePath": "/home/jyc/hdd/deltaworking/metadata/fingerprints.meta",
   "fingerprintsDeltaDedupFolder": "/home/jyc/hdd/deltaworking/metadata/fingerprintsDeltaDedup",
   "cache_size": 30,
-  "DeltaDedup": "yes",
+  "DeltaDedup": "no",
   "base_size": 1,
   "delta_num": 9,
   "min_dr": 0

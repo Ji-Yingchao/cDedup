@@ -8,6 +8,7 @@ class Cache{
         uint64_t getContainerReadCount(){return this->container_read_count;};
         void addContainerReadCount(){this->container_read_count++;};
         void initContainerReadCount(){this->container_read_count = 0;};
+        double total_time1 = 0.0, total_time2 = 0.0, total_time3 = 0.0;
     
     private:
         uint64_t container_read_count;

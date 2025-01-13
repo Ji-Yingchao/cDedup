@@ -9,8 +9,8 @@
   "fileRecipesPath": "/home/jyc/hdd/deltaworking/metadata/FileRecipes",
   "fingerprintsFilePath": "/home/jyc/hdd/deltaworking/metadata/fingerprints.meta",
   "fingerprintsDeltaDedupFolder": "/home/jyc/hdd/deltaworking/metadata/fingerprintsDeltaDedup",
-  "DeltaDedup": "yes",
-  "RetainVersionNumber": 20,
+  "DeltaDedup": "no",
+  "RetainVersionNumber": -1,
   "base_size": 1,
   "delta_num": 9,
   "min_dr": 0

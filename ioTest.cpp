@@ -2,15 +2,21 @@
 #include <cstring> 
 #include <cstdio>
 #include <chrono> // 用于精确测量时间
+#include <unistd.h>
+#include <fcntl.h>
 
 void test_read_performance(const char* filename, size_t buffer_size) {
-    char* buffer = new char[buffer_size]; // 分配缓冲区
+    int fd = open(filename, O_RDONLY | O_DIRECT);
+    if (fd == -1) {
+        perror("Failed to open file");
+        return ;
+    }
 
-    FILE* file = fopen(filename, "rb");
-    if (!file) {
-        std::cerr << "无法打开文件进行读取测试: " << filename << std::endl;
-        delete[] buffer;
-        return;
+    void *buffer; // 分配缓冲区
+    if (posix_memalign(&buffer, 512, buffer_size) != 0) {
+        perror("Failed to allocate aligned memory");
+        close(fd);
+        return ;
     }
 
     // 记录开始时间
@@ -20,16 +26,15 @@ void test_read_performance(const char* filename, size_t buffer_size) {
     size_t bytes_read;
 
     // 读取文件
-    while ((bytes_read = fread(buffer, 1, buffer_size, file)) > 0) {
+    while ((bytes_read = read(fd, buffer, buffer_size)) > 0) {
         total_bytes_read += bytes_read;
     }
-
     // 记录结束时间
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end_time - start_time;
 
-    fclose(file);
-    delete[] buffer;
+    free(buffer);
+    close(fd);
 
     // 输出结果
     std::cout << "[读取性能测试]" << std::endl;
@@ -39,14 +44,21 @@ void test_read_performance(const char* filename, size_t buffer_size) {
 }
 
 void test_write_performance(const char* filename, size_t buffer_size, size_t file_size_mb) {
-    char* buffer = new char[buffer_size]; // 分配缓冲区并填充数据
-    memset(buffer, 'A', buffer_size);    // 用字母 'A' 填充缓冲区
+    int fd = open(filename, O_RDWR | O_CREAT | O_DIRECT, 0777);
+    if (fd == -1) {
+        perror("Failed to open file");
+        return ;
+    }
 
-    FILE* file = fopen(filename, "wb");
-    if (!file) {
-        std::cerr << "无法打开文件进行写入测试: " << filename << std::endl;
-        delete[] buffer;
-        return;
+    void *buffer;
+    if (posix_memalign(&buffer, 512, buffer_size) != 0) {
+        perror("Failed to allocate aligned memory");
+        close(fd);
+        return ;
+    }
+
+    for (size_t i = 0; i < buffer_size; i++) {
+        ((char*)buffer)[i] = (char)(i % 256);
     }
 
     // 记录开始时间
@@ -57,10 +69,12 @@ void test_write_performance(const char* filename, size_t buffer_size, size_t fil
 
     // 写入文件
     while (total_bytes_written < bytes_to_write) {
-        size_t bytes_written = fwrite(buffer, 1, buffer_size, file);
-        if (bytes_written == 0) {
-            std::cerr << "写入文件时发生错误。" << std::endl;
-            break;
+        size_t bytes_written = write(fd, buffer, buffer_size);
+        if (bytes_written == -1) {
+            perror("Failed to write to file");
+            free(buffer);
+            close(fd);
+            return ;
         }
         total_bytes_written += bytes_written;
     }
@@ -69,8 +83,8 @@ void test_write_performance(const char* filename, size_t buffer_size, size_t fil
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end_time - start_time;
 
-    fclose(file);
-    delete[] buffer;
+    free(buffer);
+    close(fd);
 
     // 输出结果
     std::cout << "[写入性能测试]" << std::endl;
@@ -80,8 +94,12 @@ void test_write_performance(const char* filename, size_t buffer_size, size_t fil
 }
 
 int main() {
-    const char* read_filename = "/home/jyc/ssd/dataset/linuxVersion/linux-5.10.100.tar"; // 要读取的文件
-    const char* write_filename = "/home/jyc/ssd/restore/test_write.dat";    // 要写入的文件
+    // /home/jyc/ssd/dataset/linuxVersion/linux-5.10.100.tar
+    // /home/jyc/ssd/restore/test_write.dat
+    // /home/jyc/hdd/data/linux-5.10.100.tar
+    // /home/jyc/hdd/restore/test_write.dat
+    const char* read_filename = "/home/jyc/hdd/data/linux-5.10.100.tar"; // 要读取的文件
+    const char* write_filename = "/home/jyc/hdd/restore/test_write.dat";    // 要写入的文件
     const size_t buffer_size = 30 * 4 * 1024 * 1024;                            // 30*4MB的缓冲区
     const size_t file_size_mb = 1024;                                           // 写入文件大小 (MB)
 
