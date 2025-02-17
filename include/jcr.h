@@ -30,6 +30,15 @@ struct jcr{
 	double hash_time;
 	double dedup_time;
 	double write_time;
+
+	/*
+	 * the time consuming of five dedup phase
+	 */
+	double read_recipe_time;
+	double read_chunk_time;
+	double write_chunk_time;
+
+	int read_container_num;
 };
 
 extern struct jcr jcr;
@@ -37,5 +46,6 @@ extern struct jcr jcr;
 void init_jcr();
 void init_backup_jcr();
 void show_backup_jcr();
+void show_restore_jcr();
 
 #endif /* Jcr_H_ */

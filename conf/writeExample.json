@@ -1,6 +1,6 @@
 {
   "Task": "write",
-  "InputFile": "/home/jyc/ssd/dataset/linuxVersion/linux-5.10.100.tar",
+  "InputFile": "/home/cyf/ssd0/SFD_TAR/v6.9.tar",
   "ChunkingMethod": "cdc",
   "Size": 4096,
   "Normal": 2,

@@ -321,12 +321,27 @@ int MetadataManager::addNewEntry(SHA1FP sha1, ENTRY_VALUE value, bool in_delta){
     return 0;
 }
 
+// delta版本的重复块可以来自delta和base，base只来自base
+int MetadataManager::addRefCnt(const SHA1FP sha1, bool in_delta){
+    if(in_delta){
+        auto dedupIter = this->fp_table_delta.find(sha1);
+        if(dedupIter != this->fp_table_delta.end()){
+            return ++dedupIter->second.ref_cnt;
+        } 
+    }
+    auto dedupIter = this->fp_table_base.find(sha1);
+    if(dedupIter != this->fp_table_base.end()){
+        return ++dedupIter->second.ref_cnt;
+    }
+    printf("addRefCnt: did not find\n");
+}
+
 int MetadataManager::addRefCnt(const SHA1FP sha1){
     auto dedupIter = this->fp_table_added.find(sha1);
     if(dedupIter != this->fp_table_added.end())
         return ++dedupIter->second.ref_cnt;
     dedupIter = this->fp_table_origin.find(sha1);
-    if(dedupIter != this->fp_table_added.end())
+    if(dedupIter != this->fp_table_origin.end())
         return ++dedupIter->second.ref_cnt;
     printf("addRefCnt: did not find\n");
 }

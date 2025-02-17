@@ -49,10 +49,10 @@ class MetadataManager {
         }
 
         int save();
+        //暂不支持中断打桩写入，只支持目录批量一次性写入，所以没有对应的load函数(已实现loadVersion)
         int load();
         // int load(int restore_version);
         int loadVersion(int version, bool is_restore);
-        //暂不支持中断打桩写入，只支持目录批量一次性写入，所以没有对应的load函数
         int save(int, int, int);
         int saveVersion(int, bool, bool);
         LookupResult dedupLookup(SHA1FP sha1);
@@ -60,6 +60,7 @@ class MetadataManager {
         int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value);
         int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value, bool);
         int addRefCnt(const SHA1FP sha1);
+        int addRefCnt(const SHA1FP sha1,bool );
         ENTRY_VALUE getEntry(const SHA1FP sha1);
         std::string genFPname(int version, bool base);
         void loadDeltaDedupFp(std::string fp_name, bool is_restore);

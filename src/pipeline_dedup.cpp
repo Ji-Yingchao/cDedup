@@ -106,12 +106,21 @@ void *dedup_thread(void *arg) {
 
 	struct ENTRY_VALUE entry_value;
 	
+	//deltaDedup只实现了固定base
 	bool dd = Config::getInstance().isDeltaDedup();
     uint32_t current_version = getVersion(Config::getInstance().getFileRecipesPath().c_str(), "recipe");
     uint32_t base_size = Config::getInstance().getBaseSize();
     uint32_t delta_num = Config::getInstance().getDeltaNum();
 	uint32_t min_destination_base = current_version -  current_version % (base_size + delta_num);
 	bool in_delta = (current_version % (base_size + delta_num)) > (base_size-1);
+
+	if(current_version != 0){
+		if(!dd){
+			GlobalMetadataManagerPtr->load();
+		}else if(dd && in_delta){
+			GlobalMetadataManagerPtr->loadVersion(current_version-1,false);
+		}
+	}
 
     while (1) {
 		struct chunk *c = NULL;
@@ -172,15 +181,18 @@ void *dedup_thread(void *arg) {
 			container_inner_index ++;
 			
 		}else if(lookup_result == Dedup){
-			GlobalMetadataManagerPtr->addRefCnt(sha1_fp);
-			
+			if(dd){
+				GlobalMetadataManagerPtr->addRefCnt(sha1_fp, in_delta);
+			}else{
+				GlobalMetadataManagerPtr->addRefCnt(sha1_fp);
+			}
 		}else{
 			;
 		}
     }
 
 	if(container_inner_offset > 0)
-            saveContainerBuf();
+        saveContainerBuf();
 
 	// flush file_recipe
     saveFileRecipe(file_recipe, Config::getInstance().getFileRecipesPath().c_str());
