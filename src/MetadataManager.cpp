@@ -9,6 +9,8 @@
 #include <regex>
 #include <experimental/filesystem>
 
+#include <fstream>
+
 namespace fs = std::experimental::filesystem;
 
 MetadataManager *GlobalMetadataManagerPtr;
@@ -229,11 +231,11 @@ int MetadataManager::load(){
     printf("-----------------------Loading FP-index-----------------------\n");
     printf("Loading index..\n");
 
-    unsigned char* metadata_cache = (unsigned char*)malloc(FILE_CACHE);
+    unsigned char* metadata_cache = (unsigned char*)malloc(MAX_FILE_CACHE);
     int fd = open(this->metadata_file_path.c_str(), O_RDONLY);
     if(fd < 0)
         printf("MetadataManager::load error\n");
-    int n = read(fd, metadata_cache, FILE_CACHE);
+    int n = read(fd, metadata_cache, MAX_FILE_CACHE);
     int meta_size = sizeof(SHA1FP) + sizeof(ENTRY_VALUE);
     int entry_count = n/meta_size;
     SHA1FP tmp_fp;
@@ -349,20 +351,3 @@ int MetadataManager::addRefCnt(const SHA1FP sha1){
 ENTRY_VALUE MetadataManager::getEntry(const SHA1FP sha1){
     return this->fp_table_origin[sha1];
 }
-
-// int MetadataManager::load(int restore_version){
-//     // 如果这个版本是base，那么只需加载base的fp
-//     // 如果这个版本是delta，那么需要加载它前面一个base的fp和它自己的fp
-//     int delta_num = Config::getInstance().getDeltaNum();
-
-//     // 因为现在默认base size是1，所以是delta_num + 1
-//     if(restore_version % (delta_num + 1) == 0){
-//         // 仅仅需要加载base fp
-//         loadDeltaDedupFp(genFPname(restore_version, true));
-//     }else{
-//         // 需要加载base 和 delta的fp
-//         int base_pos = restore_version - (restore_version % (delta_num + 1));
-//         loadDeltaDedupFp(genFPname(base_pos, true));
-//         loadDeltaDedupFp(genFPname(restore_version, false));
-//     }
-// }

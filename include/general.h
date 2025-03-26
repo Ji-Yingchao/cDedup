@@ -23,8 +23,9 @@
 
 #define MB (1024*1024)
 #define FILE_CACHE (256*1024*1024)
+#define MAX_FILE_CACHE (1024*1024*1024)
 #define CONTAINER_SIZE (4*1024*1024)
-
+// 4*1024*1024
 
 /* the buffer size for read phase */
 #define DEFAULT_BLOCK_SIZE (1024*1024*1)

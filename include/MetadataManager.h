@@ -19,6 +19,13 @@ struct __attribute__ ((__packed__)) SHA1FP {
     void print() {
         printf("%lu:%d:%d:%d\n", fp1, fp2, fp3, fp4);
     }
+
+    std::string to_string() const {
+        char buffer[64];  // 足够存储所有数值
+        snprintf(buffer, sizeof(buffer), "%lu:%u:%u:%u", fp1, fp2, fp3, fp4);
+        return std::string(buffer);
+    }
+
 };
 
 struct ENTRY_VALUE {
@@ -30,11 +37,20 @@ struct ENTRY_VALUE {
     uint32_t version;
 };
 
+// struct TupleHasher {
+//     std::size_t operator()(const SHA1FP &key) const {
+//         return key.fp1;
+//     }
+// };
+
 struct TupleHasher {
     std::size_t operator()(const SHA1FP &key) const {
-        return key.fp1;
+        return std::hash<std::string>{}(
+            std::string(reinterpret_cast<const char*>(&key), sizeof(SHA1FP))
+        );
     }
 };
+
 
 struct TupleEqualer {
     bool operator()(const SHA1FP &lhs, const SHA1FP &rhs) const {
@@ -49,9 +65,9 @@ class MetadataManager {
         }
 
         int save();
-        //暂不支持中断打桩写入，只支持目录批量一次性写入，所以没有对应的load函数(已实现loadVersion)
+        // 普通加载元数据，只支持目录批量一次性写入
         int load();
-        // int load(int restore_version);
+        // 打桩加载元数据（fp——>entry）
         int loadVersion(int version, bool is_restore);
         int save(int, int, int);
         int saveVersion(int, bool, bool);

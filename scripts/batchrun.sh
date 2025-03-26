@@ -1,6 +1,5 @@
-# folder_path="/home/jyc/ssd/dataset/linuxVersion/"
-folder_path="/home/cyf/ssd0/SFD_TAR/"
-files=$(ls $folder_path)
+folder_path="/home/jyc/ssd/dataset/LLVM/"
+files=$(ls $folder_path | sort -V)
 for new_file_path in $files
 do
     full_path=$folder_path$new_file_path
@@ -9,3 +8,10 @@ do
     # ../cDedup ../conf/writeExample.json | grep "throughput(MB/s)" | awk '{print $2}'
     ../cDedup ../conf/writeExample.json | grep "Dedup Ratio" | awk '{print $3}'
 done
+
+# 多值筛选输出
+# ../cDedup ../conf/writeExample.json | grep -E "metadata table load|New added item|total item" | awk '
+    # /metadata table load/ {load_item = $4}
+    # /New added item/ {new_added = $4}
+    # /total item/ {total_item = $3}
+    # END {print load_item "\t" new_added "\t" total_item}'

@@ -250,6 +250,27 @@ std::vector<fs::path> traverseDirectory(const fs::path& directory) {
     }
 }
 
+// uint64_t getFileSize(int version){
+//     std::vector<std::string> file_recipe = getFileRecipe(version,Config::getInstance().getFileRecipesPath().c_str());
+//     // GlobalMetadataManagerPtr->load(version);
+//     if(Config::getInstance().isDeltaDedup()){
+//         GlobalMetadataManagerPtr->loadVersion(version,true);
+//     }else{
+//         GlobalMetadataManagerPtr->load();
+//     }
+    
+//     uint64_t file_size = 0;
+//     SHA1FP fp;
+//     ENTRY_VALUE ev;
+//     for(auto &x : file_recipe){
+//         memcpy(&fp, x.data(), sizeof(SHA1FP));
+//         ev = GlobalMetadataManagerPtr->getEntry(fp);
+//         file_size += ev.chunk_length;
+//     }
+//     //printf("file size %.2fGB", (float)(file_size)/GB);
+//     return file_size;
+// }
+
 //获取该元数据所有ContainerId
 std::vector<uint32_t> getContainerIds(std::string fp_name, uint64_t file_size){
     unsigned char* metadata_cache = (unsigned char*)malloc(FILE_CACHE);
@@ -347,7 +368,7 @@ void deleteFile(int delete_version,bool in_delta){
     printf("Delete time %.2f s\n",(float)(single_delete_time_us)/1000000);
 }
 
-// DeltaDedup-保留最近n个版本的删除（固定长度的删除）
+// DeltaDedup-保留最近n个版本的删除
 void do_delete(int current_version){
     int retain_version_number = Config::getInstance().getRetainVersionNumber();
     if(retain_version_number>=0 && current_version >= retain_version_number){
@@ -414,7 +435,7 @@ void writeFile(string path){
     uint32_t delta_num = Config::getInstance().getDeltaNum();
     uint32_t min_dr = Config::getInstance().getMinDR();
     uint32_t min_destination_base = current_version -  current_version % (base_size + delta_num);
-    // uint32_t max_destination_base = min_destination_base + base_size - 1;
+    uint32_t max_destination_base = min_destination_base + base_size - 1;
     bool in_delta = false;
     if(min_dr == 0){
         in_delta = (current_version % (base_size + delta_num)) > (base_size-1);
@@ -667,6 +688,7 @@ int main(int argc, char** argv){
                 exit(-1);
             }
 
+            // 计算花费时间（单位：秒）
             double total_time1 = 0.0, total_time2 = 0.0, total_time3 = 0.0;
             struct timeval start1, end1,start2, end2;
             Cache* cc;
@@ -676,6 +698,15 @@ int main(int argc, char** argv){
                 cc = new ChunkCache(Config::getInstance().getContainersPath().c_str(), 16*1024);
             }
             reference_containers_count = cc->getReferenceContainerCount();  
+            printf("Reference Container Count: %ld\n", reference_containers_count);
+            printf("Recipe items Count: %ld\n", file_recipe.size());
+            
+            // std::string filename = "container_a.txt";
+            // std::ofstream outFile(filename, std::ios::out | std::ios::binary);
+            // if (!outFile) {
+            //     std::cerr << "无法打开文件: " << filename << std::endl;
+            //     exit(-1);
+            // }
             
 
             SHA1FP fp;
@@ -685,11 +716,12 @@ int main(int argc, char** argv){
                 ev = GlobalMetadataManagerPtr->getEntry(fp);
                 gettimeofday(&start2, NULL);
                 std::string ck_data = cc->getChunkData(ev);
+                // outFile << x.data() << std::endl;
+                // outFile << ev.container_number << std::endl;
 
                 gettimeofday(&end2, NULL);
                 total_time2 += (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
                 
-                // 仅数容器数量，先注释掉
                 // if(write_buffer_offset + ck_data.size() >= FILE_CACHE){
                 //     flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
                 //     //flushAssemblingBuffer(fd, assembling_buffer, FILE_CACHE);
@@ -702,9 +734,15 @@ int main(int argc, char** argv){
             }
             //outFile.close();
 
+            //o_direct需要对齐
+            // if(write_buffer_offset/SECTOR_SIZE != 0){
+            //     write_buffer_offset =  ((write_buffer_offset + SECTOR_SIZE - 1) / SECTOR_SIZE) * SECTOR_SIZE;
+            // }
             flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
             close(fd);
-
+            // printf("代码段1总花费时间: %.6f 秒\n", cc->total_time1/1000000);
+            // printf("代码段2总花费时间: %.6f 秒\n", cc->total_time2/1000000);
+            // printf("选中代码段总花费时间: %.6f 秒\n", total_time2/1000000);
             cc->removeDuplicates();
             reference_containers_count = cc->getReferenceContainerCount();  
             container_read_count = cc->getContainerReadCount();
