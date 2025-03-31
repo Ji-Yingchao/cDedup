@@ -81,7 +81,12 @@ class MetadataManager {
         std::string genFPname(int version, bool base);
         void loadDeltaDedupFp(std::string fp_name, bool is_restore);
 
+        int getBaseContainerMaxValue();
+
     private:
+        //为了判断delta容器和container容器，识别出base容器的最大值
+        int base_container_max_value = 0;
+
         std::string metadata_file_path;
         // FP-index used for normal deduplication
         std::unordered_map<SHA1FP, ENTRY_VALUE, TupleHasher, TupleEqualer> fp_table_origin;

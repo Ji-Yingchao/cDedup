@@ -5,6 +5,7 @@
 
 std::string ContainerCache::getChunkData(ENTRY_VALUE ev){
     auto numberIter = this->container_index_set.find(ev.container_number);
+    //只数容器数量，所以注释
     // if(numberIter != this->container_index_set.end()){
     //     //cache hit
     //     return std::string(cache[ev.container_number], ev.offset, ev.chunk_length);
@@ -16,7 +17,6 @@ std::string ContainerCache::getChunkData(ENTRY_VALUE ev){
     //     this->loadContainer(ev.container_number);
     //     return std::string(cache[ev.container_number], ev.offset, ev.chunk_length);
     // }
-    //只数容器数量，所以注释
     if(numberIter != this->container_index_set.end()){
         //cache hit
         return std::string("aaa");
@@ -52,6 +52,7 @@ void ContainerCache::loadContainer(int container_index){
 
     // this->cache[container_index] = content;
 
+    // 数容器数量
     this->addContainerReadCount();
     this->addReferenceContainer(container_index);
 

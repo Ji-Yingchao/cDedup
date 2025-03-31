@@ -635,6 +635,9 @@ int main(int argc, char** argv){
             GlobalMetadataManagerPtr->load();
         }
 
+        int base_container_max_value = GlobalMetadataManagerPtr->getBaseContainerMaxValue();
+        printf("Base Container Max Value: %d\n", base_container_max_value);
+
         struct timeval restore_time_start, restore_time_end;
         gettimeofday(&restore_time_start, NULL);
 
@@ -674,8 +677,7 @@ int main(int argc, char** argv){
                 cc = new ContainerCache(Config::getInstance().getContainersPath().c_str(), Config::getInstance().getCacheSize());
             }else if(rm == CHUNK_CACHE){
                 cc = new ChunkCache(Config::getInstance().getContainersPath().c_str(), 16*1024);
-            }
-            reference_containers_count = cc->getReferenceContainerCount();  
+            }  
             
 
             SHA1FP fp;
@@ -705,9 +707,20 @@ int main(int argc, char** argv){
             flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
             close(fd);
 
+            // 统计读容器数量和引用容器数量
+            container_read_count = cc->getReferenceContainerCount();
+            auto [base_counter, delta_container] = cc->countBaseAndDelta(base_container_max_value);
+            printf("Read Container Count: %ld\n", container_read_count);
+            printf("Read Base Container Count: %d\n", base_counter);
+            printf("Read Delta Container Count: %d\n", delta_container);
+
             cc->removeDuplicates();
-            reference_containers_count = cc->getReferenceContainerCount();  
-            container_read_count = cc->getContainerReadCount();
+            reference_containers_count = cc->getReferenceContainerCount(); 
+            auto [r_base_counter, r_delta_container] = cc->countBaseAndDelta(base_container_max_value);
+            //container_read_count = cc->getContainerReadCount(); 
+            printf("Reference Container Count: %ld\n", reference_containers_count);
+            printf("Reference Base Container Count: %d\n", r_base_counter);
+            printf("Reference Delta Container Count: %d\n", r_delta_container);
 
         }else if(Config::getInstance().getRestoreMethod() == FAA_FIXED){
             int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT, 0777);
@@ -790,8 +803,8 @@ int main(int argc, char** argv){
         printf("Restore size %" PRIu64 "\n",    restored_size);
         printf("Restore Throughput %.2f MiB/s\n", restore_throughput);
         printf("Speed factor %.2f\n", speed_factor);
-        printf("Read Container Count: %ld\n", container_read_count);
-        printf("Reference Container Count: %ld\n", reference_containers_count);
+        
+        
     }else if(Config::getInstance().getTaskType() == TASK_DELETE){
         // 仅实现固定DeltaDedup的删除
         int delete_version = Config::getInstance().getDeleteVersion();

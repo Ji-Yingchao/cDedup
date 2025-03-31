@@ -210,12 +210,20 @@ void MetadataManager::loadDeltaDedupFp(std::string fp_name, bool is_restore){
     int entry_count = n/meta_size;
     SHA1FP tmp_fp;
     ENTRY_VALUE tmp_value;
+    int tmp_base_container_index = 0;
 
     for(int i=0; i<=entry_count-1; i++){
         memcpy(&tmp_fp, metadata_cache+i*meta_size, sizeof(SHA1FP));
         memcpy(&tmp_value, metadata_cache+i*meta_size + sizeof(SHA1FP), sizeof(ENTRY_VALUE));
 
         if(is_restore){
+            // 找到base容器的最大值
+            if(this->base_container_max_value==0 && tmp_value.container_number > tmp_base_container_index){
+                tmp_base_container_index = tmp_value.container_number;
+            }
+            if(i==entry_count-1 && this->base_container_max_value==0){
+                this->base_container_max_value = tmp_base_container_index;
+            }
             this->fp_table_origin.emplace(tmp_fp, tmp_value);
         }else{
             this->fp_table_base.emplace(tmp_fp, tmp_value);
@@ -350,4 +358,8 @@ int MetadataManager::addRefCnt(const SHA1FP sha1){
 
 ENTRY_VALUE MetadataManager::getEntry(const SHA1FP sha1){
     return this->fp_table_origin[sha1];
+}
+
+int MetadataManager::getBaseContainerMaxValue(){
+    return this->base_container_max_value;
 }

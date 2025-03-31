@@ -21,6 +21,17 @@ class Cache{
         void addReferenceContainer(int num) {
             this->reference_containers.push_back(num);
         }
+        // 统计base容器和delta容器的个数
+        std::pair<size_t, size_t> countBaseAndDelta(uint64_t threshold) {
+            // 小于或等于 threshold 的容器是base
+            size_t count_base = std::count_if(this->reference_containers.begin(), this->reference_containers.end(),
+                                            [threshold](uint64_t value) { return value <= threshold; });
+
+            size_t count_delta = std::count_if(this->reference_containers.begin(), this->reference_containers.end(),
+                                                [threshold](uint64_t value) { return value > threshold; });
+
+            return {count_base, count_delta};
+        }
     
     private:
         uint64_t container_read_count;
