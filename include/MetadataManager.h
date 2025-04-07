@@ -69,7 +69,7 @@ class MetadataManager {
         int load();
         // 打桩加载元数据（fp——>entry）
         int loadVersion(int version, bool is_restore);
-        int save(int, int, int);
+        //int save(int, int, int);
         int saveVersion(int, bool, bool);
         LookupResult dedupLookup(SHA1FP sha1);
         LookupResult dedupLookup(SHA1FP sha1, bool);

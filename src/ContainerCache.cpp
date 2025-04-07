@@ -6,28 +6,28 @@
 std::string ContainerCache::getChunkData(ENTRY_VALUE ev){
     auto numberIter = this->container_index_set.find(ev.container_number);
     //只数容器数量，所以注释
-    // if(numberIter != this->container_index_set.end()){
-    //     //cache hit
-    //     return std::string(cache[ev.container_number], ev.offset, ev.chunk_length);
-    // }else{
-    //     //cache miss
-    //     if(container_index_queue.size() >= this->cache_max_size){
-    //         evictContainerFIFO();
-    //     }
-    //     this->loadContainer(ev.container_number);
-    //     return std::string(cache[ev.container_number], ev.offset, ev.chunk_length);
-    // }
     if(numberIter != this->container_index_set.end()){
         //cache hit
-        return std::string("aaa");
+        return std::string(cache[ev.container_number], ev.offset, ev.chunk_length);
     }else{
         //cache miss
         if(container_index_queue.size() >= this->cache_max_size){
             evictContainerFIFO();
         }
         this->loadContainer(ev.container_number);
-        return std::string("bbb");
+        return std::string(cache[ev.container_number], ev.offset, ev.chunk_length);
     }
+    // if(numberIter != this->container_index_set.end()){
+    //     //cache hit
+    //     return std::string("aaa");
+    // }else{
+    //     //cache miss
+    //     if(container_index_queue.size() >= this->cache_max_size){
+    //         evictContainerFIFO();
+    //     }
+    //     this->loadContainer(ev.container_number);
+    //     return std::string("bbb");
+    // }
 }
 
 void ContainerCache::loadContainer(int container_index){
@@ -36,27 +36,26 @@ void ContainerCache::loadContainer(int container_index){
     this->container_index_set.insert(container_index);
     
     //只数容器数量，所以注释
-    // std::string container_name(this->containers_path);
-    // container_name.append("/container");
-    // container_name.append(std::to_string(container_index));
-    // int fd = open(container_name.data(), O_RDONLY | O_DIRECT);
+    std::string container_name(this->containers_path);
+    container_name.append("/container");
+    container_name.append(std::to_string(container_index));
+    int fd = open(container_name.data(), O_RDONLY | O_DIRECT);
 
-    // memset(this->container_buf, 0, CONTAINER_SIZE);
-    // //gettimeofday(&start2, NULL);
-    // int n = read(fd, this->container_buf, CONTAINER_SIZE); // 可能塞不满
-    // //gettimeofday(&end2, NULL);
-    // //int tmp = (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
-    // //this->total_time2 += (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
+    memset(this->container_buf, 0, CONTAINER_SIZE);
+    //gettimeofday(&start2, NULL);
+    int n = read(fd, this->container_buf, CONTAINER_SIZE); // 可能塞不满
+    //gettimeofday(&end2, NULL);
+    //int tmp = (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
+    //this->total_time2 += (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
 
-    // std::string content(this->container_buf , n);
+    std::string content(this->container_buf , n);
 
-    // this->cache[container_index] = content;
+    this->cache[container_index] = content;
 
     // 数容器数量
-    this->addContainerReadCount();
     this->addReferenceContainer(container_index);
 
-    //close(fd);
+    close(fd);
 }
 
 void ContainerCache::evictContainerFIFO(){

@@ -15,52 +15,6 @@ namespace fs = std::experimental::filesystem;
 
 MetadataManager *GlobalMetadataManagerPtr;
 
-int MetadataManager::save(int current_version, int delta_size, int base_pos){
-    //printf("-----------------------Saving One File FP-index-----------------------\n");
-    std::string fp_name(Config::getInstance().getFpDeltaDedupFolderPath());
-    fp_name.append("/fp_");
-    fp_name.append(std::to_string(current_version));
-    if(current_version == base_pos)
-        fp_name.append("_base");
-    else
-        fp_name.append("_delta");
-
-    int fd = open(fp_name.c_str(), O_RDWR | O_CREAT, 0777);
-    if(fd < 0){
-        perror("Saving fp index error, the reason is ");
-        exit(-1);
-    }
-
-    int count = 0;
-    if(current_version == base_pos){
-        for(auto item : this->fp_table_base){
-            write(fd, (uint8_t*)&item.first, sizeof(SHA1FP));
-            write(fd, (uint8_t*)&item.second, sizeof(ENTRY_VALUE));
-            count++;
-        }
-    }else if(current_version <= (base_pos + delta_size)){
-        for(auto item : this->fp_table_delta){
-            int n = 0;
-            write(fd, (uint8_t*)&item.first, sizeof(SHA1FP));
-            write(fd, (uint8_t*)&item.second, sizeof(ENTRY_VALUE));
-            count++;
-        }
-    }else{
-        printf("Saving fp error\n");
-        exit(-1);
-    }
-
-    if(current_version == (base_pos + delta_size)){
-        fp_table_base.clear(); 
-    }
-
-    fp_table_delta.clear();
-
-    //printf("total item %d\n", count);
-    close(fd);
-    return 0;
-}
-
 int MetadataManager::saveVersion(int current_version, bool in_delta, bool clear_base){
     //printf("-----------------------Saving One File FP-index-----------------------\n");
     std::string fp_name(Config::getInstance().getFpDeltaDedupFolderPath());
@@ -224,6 +178,7 @@ void MetadataManager::loadDeltaDedupFp(std::string fp_name, bool is_restore){
             if(i==entry_count-1 && this->base_container_max_value==0){
                 this->base_container_max_value = tmp_base_container_index;
             }
+            
             this->fp_table_origin.emplace(tmp_fp, tmp_value);
         }else{
             this->fp_table_base.emplace(tmp_fp, tmp_value);
@@ -363,3 +318,49 @@ ENTRY_VALUE MetadataManager::getEntry(const SHA1FP sha1){
 int MetadataManager::getBaseContainerMaxValue(){
     return this->base_container_max_value;
 }
+
+// int MetadataManager::save(int current_version, int delta_size, int base_pos){
+//     //printf("-----------------------Saving One File FP-index-----------------------\n");
+//     std::string fp_name(Config::getInstance().getFpDeltaDedupFolderPath());
+//     fp_name.append("/fp_");
+//     fp_name.append(std::to_string(current_version));
+//     if(current_version == base_pos)
+//         fp_name.append("_base");
+//     else
+//         fp_name.append("_delta");
+
+//     int fd = open(fp_name.c_str(), O_RDWR | O_CREAT, 0777);
+//     if(fd < 0){
+//         perror("Saving fp index error, the reason is ");
+//         exit(-1);
+//     }
+
+//     int count = 0;
+//     if(current_version == base_pos){
+//         for(auto item : this->fp_table_base){
+//             write(fd, (uint8_t*)&item.first, sizeof(SHA1FP));
+//             write(fd, (uint8_t*)&item.second, sizeof(ENTRY_VALUE));
+//             count++;
+//         }
+//     }else if(current_version <= (base_pos + delta_size)){
+//         for(auto item : this->fp_table_delta){
+//             int n = 0;
+//             write(fd, (uint8_t*)&item.first, sizeof(SHA1FP));
+//             write(fd, (uint8_t*)&item.second, sizeof(ENTRY_VALUE));
+//             count++;
+//         }
+//     }else{
+//         printf("Saving fp error\n");
+//         exit(-1);
+//     }
+
+//     if(current_version == (base_pos + delta_size)){
+//         fp_table_base.clear(); 
+//     }
+
+//     fp_table_delta.clear();
+
+//     //printf("total item %d\n", count);
+//     close(fd);
+//     return 0;
+// }

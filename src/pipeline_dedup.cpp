@@ -20,20 +20,7 @@ extern SyncQueue* hash_queue;
 extern MetadataManager *GlobalMetadataManagerPtr;
 namespace fs = std::experimental::filesystem;
 
-static uint32_t getFilesNum(const char* dirPath){
-    int ans = 0;
-    DIR *dir = opendir(dirPath);
-    if(!dir){
-        printf("getFilesNum opendir error, id %d, %s, the dir is %s\n", 
-        errno, strerror(errno), dirPath);
-        closedir(dir);
-        exit(-1);
-    }
-    struct dirent* ptr;
-    while(readdir(dir)) ans++;
-    closedir(dir);
-    return ans-2;
-}
+bool clear_base_p = true;
 
 // 获取文件版本
 static int getVersion(const char* dirPath, const std::string& prefix){
@@ -113,6 +100,7 @@ void *dedup_thread(void *arg) {
     uint32_t delta_num = Config::getInstance().getDeltaNum();
 	uint32_t min_destination_base = current_version -  current_version % (base_size + delta_num);
 	bool in_delta = (current_version % (base_size + delta_num)) > (base_size-1);
+	uint32_t min_dr = Config::getInstance().getMinDR();
 
 	if(current_version != 0){
 		if(!dd){
@@ -196,11 +184,26 @@ void *dedup_thread(void *arg) {
 
 	// flush file_recipe
     saveFileRecipe(file_recipe, Config::getInstance().getFileRecipesPath().c_str());
+	double cur_dr = double(jcr.data_size-jcr.unique_data_size) / double(jcr.data_size);
 
     // save metadata entry
     GlobalMetadataManagerPtr->save();
+	// if(dd){
+    //     GlobalMetadataManagerPtr->save(current_version, delta_num, min_destination_base);
+    // }
+	
 	if(dd){
-        GlobalMetadataManagerPtr->save(current_version, delta_num, min_destination_base);
+        if(min_dr == 0){
+            if(current_version == min_destination_base)
+                in_delta = false;
+            else if(current_version <= min_destination_base + delta_num)
+                in_delta = true;
+            if(current_version == min_destination_base + delta_num)
+                clear_base_p = true;
+        }else if(min_dr > 0){
+            clear_base_p = (cur_dr < (double)min_dr/100) && in_delta;
+        }
+        GlobalMetadataManagerPtr->saveVersion(current_version, in_delta, clear_base_p);
     }
     
 	/* All files done */

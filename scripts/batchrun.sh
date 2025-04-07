@@ -1,4 +1,4 @@
-folder_path="/home/cyf/ssd0/SFD_TAR/"
+folder_path="/home/jyc/ssd/dataset/LLVM/"
 files=$(ls $folder_path | sort -V)
 for new_file_path in $files
 do

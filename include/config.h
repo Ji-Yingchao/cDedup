@@ -56,6 +56,7 @@ class Config{
         string getContainersPath(){return this->container_path;}     
         string getFullFileFingerprintsPath(){return this->full_file_fingerprints_path;}        
         string getFullFileStoragePath(){return this->full_file_storage_path;}
+        string getDedupRatioFilePath(){return this->dedup_ratio_file_path;}
 
         string getMTL1(){return this->MTL1;}
         string getMTL2(){return this->MTL2;}
@@ -91,6 +92,7 @@ class Config{
         void setContainersPath(char* s){this->container_path = s;}     
         void setFullFileFingerprintsPath(char* s){this->full_file_fingerprints_path = s;}        
         void setFullFileStoragePath(char* s){this->full_file_storage_path = s;}
+        void setDedupRatioFilePath(char* s){this->dedup_ratio_file_path = s;}
 
         void setMTL1(char* s){this->MTL1 = s;}
         void setMTL2(char* s){this->MTL2 = s;}
@@ -171,6 +173,8 @@ class Config{
                     Config::getInstance().setFullFileFingerprintsPath(valuestring);
                 } else if (strcmp(name, "fullFileStoragePath") == 0) {
                     Config::getInstance().setFullFileStoragePath(valuestring);
+                } else if (strcmp(name, "dedupRatioFilePath") == 0) {
+                    Config::getInstance().setDedupRatioFilePath(valuestring);
                 }
                 else if (strcmp(name, "MTL1") == 0) {
                     Config::getInstance().setMTL1(valuestring);
@@ -185,7 +189,7 @@ class Config{
                 }else if (strcmp(name, "MTL6") == 0) {
                     Config::getInstance().setMTL6(valuestring);
                 }
-
+                //3. deltaDedup configurations
                 else if (strcmp(name, "DeltaDedup") == 0) {
                     Config::getInstance().setDeltaDedup(valuestring);
                 }else if (strcmp(name, "base_size") == 0) {
@@ -228,7 +232,9 @@ class Config{
         int base_size;
         int delta_num;
         int min_dr;
-        int retain_version_number;
+        int retain_version_number; //系统中保留版本的个数
+        string dedup_ratio_file_path; // 之前所有版本的重删率 %
+
 
         Config() {
             avg_chunk_size = 4096;

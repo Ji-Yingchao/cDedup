@@ -54,23 +54,6 @@ extern MetadataManager *GlobalMetadataManagerPtr;
 int (*chunking) (unsigned char*p, int n);
 struct backup_job bj;
 
-bool clear_base = true;
-
-uint32_t getFilesNum(const char* dirPath){
-    int ans = 0;
-    DIR *dir = opendir(dirPath);
-    if(!dir){
-        printf("getFilesNum opendir error, id %d, %s, the dir is %s\n", 
-        errno, strerror(errno), dirPath);
-        closedir(dir);
-        exit(-1);
-    }
-    struct dirent* ptr;
-    while(readdir(dir)) ans++;
-    closedir(dir);
-    return ans-2;
-}
-
 int getVersion(const char* dirPath, const std::string& prefix){
     std::vector<int> recipe_numbers;
     std::regex recipe_pattern(prefix + R"((\d+))");
@@ -95,7 +78,6 @@ int getVersion(const char* dirPath, const std::string& prefix){
 }
 
 void saveFileRecipe(std::vector<std::string> file_recipe, const char* fileRecipesPath){
-    //int n_version = getFilesNum(fileRecipesPath);
     int n_version = getVersion(fileRecipesPath,"recipe");
     std::string recipe_name(fileRecipesPath);
     recipe_name.append("/recipe");
@@ -111,6 +93,92 @@ void saveFileRecipe(std::vector<std::string> file_recipe, const char* fileRecipe
     }
     close(fd);
 }
+
+void saveDedupRatio(bool in_delta, double dr) {
+    string attr;
+    if(in_delta) attr = "delta";
+    else attr = "base";
+    string dedup_ratio_file = Config::getInstance().getDedupRatioFilePath();
+    int fd = open(dedup_ratio_file.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0777);
+    if (fd < 0) {
+        printf("saveDedupRatio open error, id %d, %s\n", errno, strerror(errno)); 
+        exit(-1);
+    }
+
+    // 将 double 转为字符串，加换行符
+    char buf[128];
+    int len = snprintf(buf, sizeof(buf), "%s\t %.4f\n", attr.c_str(),dr);
+    if (write(fd, buf, len) < 0) {
+        printf("saveDedupRatio write error, id %d, %s\n", errno, strerror(errno));
+        close(fd);
+        exit(-1);
+    }
+
+    close(fd);
+}
+
+// pair<string, double> loadDedupRatioAtLine(int target_line) {
+//     string dedup_ratio_file = Config::getInstance().getDedupRatioFilePath();
+//     ifstream infile(dedup_ratio_file);
+//     if (!infile.is_open()) {
+//         cerr << "loadDedupRatioAtLine open error" << endl;
+//         exit(-1);
+//     }
+
+//     string line;
+//     int current_line = 0;
+//     while (getline(infile, line)) {
+//         if (!line.empty()) {
+//             if (current_line == target_line) {
+//                 string attr;
+//                 double dr;
+//                 stringstream ss(line);
+//                 ss >> attr >> dr;
+//                 if (ss.fail()) {
+//                     cerr << "Failed to parse line " << target_line << ": " << line << endl;
+//                     exit(-1);
+//                 }
+//                 return {attr, dr};
+//             }
+//             current_line++;
+//         }
+//     }
+//     infile.close();
+//     cerr << "Line " << target_line << " not found in file." << endl;
+//     exit(-1);
+// }
+
+vector<pair<string, double>> loadAllDedupRatios() {
+    string dedup_ratio_file = Config::getInstance().getDedupRatioFilePath();
+    ifstream infile(dedup_ratio_file);
+    if (!infile.is_open()) {
+        cerr << "loadAllDedupRatios open error" << endl;
+        exit(-1);
+    }
+
+    vector<pair<string, double>> results;
+    string line;
+
+    while (getline(infile, line)) {
+        if (line.empty()) continue;
+
+        string attr;
+        double dr;
+        stringstream ss(line);
+        ss >> attr >> dr;
+
+        if (ss.fail()) {
+            cerr << "Failed to parse line: " << line << endl;
+            continue;  // 可选：跳过错误行而不是退出
+        }
+
+        results.emplace_back(attr, dr);
+    }
+
+    infile.close();
+    return results;
+}
+
 
 std::string getRecipeNameFromVersion(uint8_t restore_version, const char* file_recipe_path){
     std::string recipe_name(file_recipe_path);
@@ -250,6 +318,9 @@ std::vector<fs::path> traverseDirectory(const fs::path& directory) {
     }
 }
 
+
+
+
 //获取该元数据所有ContainerId
 std::vector<uint32_t> getContainerIds(std::string fp_name, uint64_t file_size){
     unsigned char* metadata_cache = (unsigned char*)malloc(FILE_CACHE);
@@ -355,19 +426,31 @@ void do_delete(int current_version){
 
         // DeltaDedup和普通删除不同
         if(Config::getInstance().isDeltaDedup()){
-            uint32_t base_size = Config::getInstance().getBaseSize();
-            uint32_t delta_num = Config::getInstance().getDeltaNum();
-            bool in_delta = (delete_version % (base_size + delta_num)) > (base_size-1);
+            // uint32_t base_size = Config::getInstance().getBaseSize();
+            // uint32_t delta_num = Config::getInstance().getDeltaNum();
+            // bool in_delta = (delete_version % (base_size + delta_num)) > (base_size-1);
+            vector<pair<string, double>> dr_vec = loadAllDedupRatios();
+            auto [attr, dr] = dr_vec.at(delete_version);
+            bool in_delta = (attr == "delta");
             
             if(in_delta){
                 deleteFile(delete_version, true);
                 //如果连续删除，删掉最后一个delta版本之后，删除该版本对应的base
-                if(delete_version % (base_size+delta_num) == delta_num){
-                    deleteFile(delete_version-delta_num, false);
+                // if(delete_version % (base_size+delta_num) == delta_num){
+                //     deleteFile(delete_version-delta_num, false);
+                // }
+                if(delete_version+1 < dr_vec.size() && dr_vec.at(delete_version+1).first == "base"){
+                    //deleteFile(delete_version-1,false);
+                    for (int i = delete_version - 1; i >= 0; --i) {
+                        if (dr_vec[i].first == "base") {
+                            deleteFile(i,false); //删除对应的base
+                            break;
+                        }
+                    }
                 }
             }
         }else{
-            deleteFile(delete_version,true);
+            //deleteFile(delete_version,true);
         }
         
     }
@@ -415,13 +498,23 @@ void writeFile(string path){
     uint32_t min_dr = Config::getInstance().getMinDR();
     uint32_t min_destination_base = current_version -  current_version % (base_size + delta_num);
     // uint32_t max_destination_base = min_destination_base + base_size - 1;
-    bool in_delta = false;
+    
+    bool in_delta = false, clear_base = true;
+    
     if(min_dr == 0){
         in_delta = (current_version % (base_size + delta_num)) > (base_size-1);
-    }else if(clear_base){
-        in_delta = false;
-    }else{
-        in_delta = true;
+    }else if(min_dr != 0){
+        if(current_version != 0){
+            vector<pair<string, double>> dr_vec = loadAllDedupRatios();
+            auto [attr, dr] = dr_vec.at(current_version-1);
+            //auto [attr, dr] = loadDedupRatioAtLine(current_version-1);
+            clear_base = dr < (double)min_dr/100 && attr == "delta";
+        }
+        if(clear_base){
+            in_delta = false;
+        }else{
+            in_delta = true;
+        }
     }
 
     if(dd && in_delta){
@@ -515,7 +608,11 @@ void writeFile(string path){
     float throughput = (float)(sum_size) / MB / ((float)(single_dedup_time_us)/1000000);
     printf("throughput(MB/s): %.2f\n",    throughput);
     double cur_dr = double(dedup_size) / double(sum_size);
-    printf("Dedup Ratio %.2f% \n",     double(dedup_size) / double(sum_size) *100);
+    //printf("dedup ratio %.2f% \n",     double(dedup_size) / double(sum_size) *100);
+    printf("Dedup Ratio %.2f \n",     double(sum_size) / double(sum_size-dedup_size) );
+    
+    // save dedup ratio 
+    saveDedupRatio(in_delta,cur_dr);
 
     // update backup job
     bj.dedup_chunks += dedup_chunks;
@@ -525,12 +622,21 @@ void writeFile(string path){
     bj.hash_collision_sum += hash_collision_sum;
     bj.file_num++;
 
-    if(dd && (min_dr == 0)){
-        GlobalMetadataManagerPtr->save(current_version, delta_num, min_destination_base);
-    }else if(dd && (min_dr > 0)){
-        clear_base = (cur_dr < (double)min_dr/100) && in_delta;
+    // 保存指纹元数据
+    if(dd){
+        if(min_dr == 0){
+            if(current_version == min_destination_base)
+                in_delta = false;
+            else if(current_version <= min_destination_base + delta_num)
+                in_delta = true;
+            if(current_version == min_destination_base + delta_num)
+                clear_base = true;
+        }else if(min_dr > 0){
+            clear_base = (cur_dr < (double)min_dr/100) && in_delta;
+        }
         GlobalMetadataManagerPtr->saveVersion(current_version, in_delta, clear_base);
     }
+
     do_delete(current_version);
 
     // free 
@@ -614,7 +720,7 @@ int main(int argc, char** argv){
         printf("Dedup data size %" PRIu64 "\n",       bj.dedup_size);
         printf("-----------------------statics----------------------\n");
         printf("Throughput %.2f MiB/s\n",    throughput);
-        // printf("Dedup Ratio %.2f%\n",     double(bj.dedup_size) / double(bj.sum_size) *100);
+        //printf("Dedup Ratio %.2f%\n",     double(bj.dedup_size) / double(bj.sum_size) *100);
 
         // 保存全局信息
         GlobalStat::getInstance().update(bj.sum_size, bj.sum_size - bj.dedup_size);
@@ -692,35 +798,32 @@ int main(int argc, char** argv){
                 total_time2 += (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
                 
                 // 仅数容器数量，先注释掉
-                // if(write_buffer_offset + ck_data.size() >= FILE_CACHE){
-                //     flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
-                //     //flushAssemblingBuffer(fd, assembling_buffer, FILE_CACHE);
-                //     write_buffer_offset = 0;
-                // }
-                // memcpy(assembling_buffer + write_buffer_offset, ck_data.data(), ck_data.size());
+                if(write_buffer_offset + ck_data.size() >= FILE_CACHE){
+                    flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
+                    //flushAssemblingBuffer(fd, assembling_buffer, FILE_CACHE);
+                    write_buffer_offset = 0;
+                }
+                memcpy(assembling_buffer + write_buffer_offset, ck_data.data(), ck_data.size());
 
-                // write_buffer_offset += ev.chunk_length;
-                // restored_size += ev.chunk_length;
+                write_buffer_offset += ev.chunk_length;
+                restored_size += ev.chunk_length;
             }
-            //outFile.close();
 
             flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
             close(fd);
 
             // 统计读容器数量和引用容器数量
             container_read_count = cc->getReferenceContainerCount();
-            auto [base_counter, delta_container] = cc->countBaseAndDelta(base_container_max_value);
-            printf("Read Container Count: %ld\n", container_read_count);
-            printf("Read Base Container Count: %d\n", base_counter);
-            printf("Read Delta Container Count: %d\n", delta_container);
-
-            cc->removeDuplicates();
-            reference_containers_count = cc->getReferenceContainerCount(); 
-            auto [r_base_counter, r_delta_container] = cc->countBaseAndDelta(base_container_max_value);
-            //container_read_count = cc->getContainerReadCount(); 
-            printf("Reference Container Count: %ld\n", reference_containers_count);
-            printf("Reference Base Container Count: %d\n", r_base_counter);
-            printf("Reference Delta Container Count: %d\n", r_delta_container);
+            // auto [base_counter, delta_container] = cc->countBaseAndDelta(base_container_max_value);
+            // printf("Read Container Count: %ld\n", container_read_count);
+            // printf("Read Base Container Count: %d\n", base_counter);
+            // printf("Read Delta Container Count: %d\n", delta_container);
+            // cc->removeDuplicates();
+            // reference_containers_count = cc->getReferenceContainerCount(); 
+            // auto [r_base_counter, r_delta_container] = cc->countBaseAndDelta(base_container_max_value);
+            // printf("Reference Container Count: %ld\n", reference_containers_count);
+            // printf("Reference Base Container Count: %d\n", r_base_counter);
+            // printf("Reference Delta Container Count: %d\n", r_delta_container);
 
         }else if(Config::getInstance().getRestoreMethod() == FAA_FIXED){
             int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT, 0777);

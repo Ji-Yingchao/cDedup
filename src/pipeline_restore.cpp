@@ -12,21 +12,6 @@ extern SyncQueue* restore_recipe_queue;
 extern SyncQueue* restore_chunk_queue;
 extern MetadataManager *GlobalMetadataManagerPtr;
 
-static uint32_t getFilesNum(const char* dirPath){
-    int ans = 0;
-    DIR *dir = opendir(dirPath);
-    if(!dir){
-        printf("getFilesNum opendir error, id %d, %s, the dir is %s\n", 
-        errno, strerror(errno), dirPath);
-        closedir(dir);
-        exit(-1);
-    }
-    struct dirent* ptr;
-    while(readdir(dir)) ans++;
-    closedir(dir);
-    return ans-2;
-}
-
 static std::string getRecipeNameFromVersion(uint8_t restore_version, const char* file_recipe_path){
     std::string recipe_name(file_recipe_path);
     recipe_name.append("/recipe");
@@ -126,7 +111,7 @@ static void* fifo_restore_thread(void *arg) {
 		free_chunk(temp);
 	}
 
-	jcr.read_container_num = cc->getContainerReadCount();
+	jcr.read_container_num = cc->getReferenceContainerCount();
 	sync_queue_term(restore_chunk_queue);
 	return NULL;
 }

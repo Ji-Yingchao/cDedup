@@ -11,6 +11,6 @@
   "cache_size": 64,
   "DeltaDedup": "yes",
   "base_size": 1,
-  "delta_num": 100,
-  "min_dr": 70
+  "delta_num": 9,
+  "min_dr": 0
 }
