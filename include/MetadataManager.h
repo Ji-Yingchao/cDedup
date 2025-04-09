@@ -65,12 +65,13 @@ class MetadataManager {
         }
 
         int save();
+        int saveVersion(int, bool);
+
         // 普通加载元数据，只支持目录批量一次性写入
         int load();
         // 打桩加载元数据（fp——>entry）
         int loadVersion(int version, bool is_restore);
-        //int save(int, int, int);
-        int saveVersion(int, bool, bool);
+        
         LookupResult dedupLookup(SHA1FP sha1);
         LookupResult dedupLookup(SHA1FP sha1, bool);
         int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value);
@@ -82,6 +83,7 @@ class MetadataManager {
         void loadDeltaDedupFp(std::string fp_name, bool is_restore);
 
         int getBaseContainerMaxValue();
+        void clear_base();
 
     private:
         //为了判断delta容器和container容器，识别出base容器的最大值

@@ -203,7 +203,10 @@ void *dedup_thread(void *arg) {
         }else if(min_dr > 0){
             clear_base_p = (cur_dr < (double)min_dr/100) && in_delta;
         }
-        GlobalMetadataManagerPtr->saveVersion(current_version, in_delta, clear_base_p);
+        GlobalMetadataManagerPtr->saveVersion(current_version, in_delta);
+		if(clear_base_p){
+			GlobalMetadataManagerPtr->clear_base();
+		}
     }
     
 	/* All files done */

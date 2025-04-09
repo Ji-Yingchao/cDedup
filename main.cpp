@@ -179,29 +179,43 @@ void writeFile(string path){
     uint64_t hash_collision_sum = 0;
 
     // delta重删
-    bool dd = Config::getInstance().getDedupMethod() != DEDUP_GLOBAL;
+    DEDUP_METHOD dedupMethod = Config::getInstance().getDedupMethod();
     uint32_t current_version = getVersion(Config::getInstance().getFileRecipesPath().c_str(), "recipe");
-    uint32_t base_size = Config::getInstance().getBaseSize();
-    uint32_t delta_num = Config::getInstance().getDeltaNum();
-    uint32_t min_dr = Config::getInstance().getMinDR();
-    uint32_t min_destination_base = current_version -  current_version % (base_size + delta_num);
     // uint32_t max_destination_base = min_destination_base + base_size - 1;
     
     bool in_delta = false, clear_base = true;
-    if(min_dr == 0){
+    if(dedupMethod == DEDUP_INTERVAL){
+        uint32_t base_size = Config::getInstance().getBaseSize();
+        uint32_t delta_num = Config::getInstance().getDeltaNum();
         in_delta = (current_version % (base_size + delta_num)) > (base_size-1);
-    }else if(current_version != 0){                                 //版本0，初始值满足动态要求
+
+        uint32_t min_destination_base = current_version -  current_version % (base_size + delta_num);
+        if(current_version == min_destination_base + delta_num)
+            GlobalMetadataManagerPtr->clear_base();
+    }
+    //版本0，初始值满足动态要求
+    else if(dedupMethod == DEDUP_AUTOMATIC && current_version != 0){    
+        uint32_t min_dr = Config::getInstance().getMinDR(); 
         vector<pair<string, double>> dr_vec = loadAllDedupRatios();
         auto [attr, dr] = dr_vec.at(current_version-1);
         clear_base = dr < (double)min_dr/100 && attr == "delta";
+        if(clear_base)
+            GlobalMetadataManagerPtr->clear_base();
 
         in_delta = !clear_base; //清除base的fp后，in_delta必为false
     }
 
-    if(dd && in_delta){
-        GlobalMetadataManagerPtr->loadVersion(current_version-1,false);
+    // load metadata
+    if(current_version != 0){
+        if(dedupMethod == DEDUP_GLOBAL){
+            GlobalMetadataManagerPtr->load();
+        }
+        else if(in_delta){
+            GlobalMetadataManagerPtr->loadVersion(current_version-1,false);
+        }
     }
-    
+
+
     // 普通分块重删，来一个块查寻一次，然后把non-duplicate chunk保存到container去
     for(;;){
         file_offset = 0;
@@ -223,10 +237,10 @@ void writeFile(string path){
             // Dedup
             LookupResult lookup_result;
             
-            if(dd)
-                lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp, in_delta); 
-            else
+            if(dedupMethod == DEDUP_GLOBAL)
                 lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp);
+            else
+                lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp, in_delta); 
 
             //ReWrite
 
@@ -247,10 +261,10 @@ void writeFile(string path){
                 entry_value.version = current_version;
                 entry_value.ref_cnt = 1;
 
-                if(dd){
-                    GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value, in_delta);
-                }else{
+                if(dedupMethod == DEDUP_GLOBAL){
                     GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value);
+                }else{
+                    GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value, in_delta);
                 }
 
                 // rev
@@ -286,15 +300,19 @@ void writeFile(string path){
     gettimeofday(&backup_time_end, NULL);
     uint64_t single_dedup_time_us = (backup_time_end.tv_sec - backup_time_start.tv_sec) * 1000000 + 
                                          backup_time_end.tv_usec - backup_time_start.tv_usec;
+    
     float throughput = (float)(sum_size) / MB / ((float)(single_dedup_time_us)/1000000);
     printf("throughput(MB/s): %.2f\n",    throughput);
+    
     double cur_dr = double(dedup_size) / double(sum_size);
     //printf("dedup ratio %.2f% \n",     double(dedup_size) / double(sum_size) *100);
     printf("Dedup Ratio %.2f \n",     double(sum_size) / double(sum_size-dedup_size) );
     
-    // save dedup ratio 
-    saveDedupRatio(in_delta,cur_dr);
-
+    // save dedup ratio
+    if(dedupMethod != DEDUP_GLOBAL){
+        saveDedupRatio(in_delta,cur_dr);
+    }
+    
     // update backup job
     bj.dedup_chunks += dedup_chunks;
     bj.dedup_size += dedup_size;
@@ -303,15 +321,11 @@ void writeFile(string path){
     bj.hash_collision_sum += hash_collision_sum;
     bj.file_num++;
 
-    // save fp&entry metadata
-    if(dd){
-        if(min_dr == 0){
-            if(current_version == min_destination_base + delta_num)
-                clear_base = true;
-        }else if(min_dr > 0){
-            clear_base = (cur_dr < (double)min_dr/100) && in_delta;
-        }
-        GlobalMetadataManagerPtr->saveVersion(current_version, in_delta, clear_base);
+    // save fp-entry metadata
+    if(dedupMethod == DEDUP_GLOBAL){
+        GlobalMetadataManagerPtr->save();
+    }else{
+        GlobalMetadataManagerPtr->saveVersion(current_version, in_delta);
     }
 
     do_delete(current_version);
@@ -355,13 +369,6 @@ int main(int argc, char** argv){
 
     // 不支持普通重删和DeltaDedup混合写入
     if(Config::getInstance().getTaskType() == TASK_WRITE){
-        int current_version = getVersion(Config::getInstance().getFileRecipesPath().c_str(), "recipe");
-        if(current_version != 0){
-            if(Config::getInstance().getDedupMethod() == DEDUP_GLOBAL){
-                GlobalMetadataManagerPtr->load();
-            }
-        }
-
         initChunkingAlgorithm();
 
         string input_path = Config::getInstance().getInputPath();
@@ -402,9 +409,6 @@ int main(int argc, char** argv){
         // 保存全局信息
         GlobalStat::getInstance().update(bj.sum_size, bj.sum_size - bj.dedup_size);
         GlobalStat::getInstance().save_arguments(global_stat_path);
-        
-        // save metadata entry
-        GlobalMetadataManagerPtr->save();
 
     }
     else if(Config::getInstance().getTaskType() == TASK_RESTORE){

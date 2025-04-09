@@ -15,7 +15,7 @@ namespace fs = std::experimental::filesystem;
 
 MetadataManager *GlobalMetadataManagerPtr;
 
-int MetadataManager::saveVersion(int current_version, bool in_delta, bool clear_base){
+int MetadataManager::saveVersion(int current_version, bool in_delta){
     //printf("-----------------------Saving One File FP-index-----------------------\n");
     std::string fp_name(Config::getInstance().getFpDeltaDedupFolderPath());
     fp_name.append("/fp_");
@@ -48,10 +48,6 @@ int MetadataManager::saveVersion(int current_version, bool in_delta, bool clear_
     }else{
         printf("Saving fp error\n");
         exit(-1);
-    }
-
-    if(clear_base){
-        fp_table_base.clear(); 
     }
 
     fp_table_delta.clear();
@@ -317,6 +313,10 @@ ENTRY_VALUE MetadataManager::getEntry(const SHA1FP sha1){
 
 int MetadataManager::getBaseContainerMaxValue(){
     return this->base_container_max_value;
+}
+
+void MetadataManager::clear_base(){
+    fp_table_base.clear(); 
 }
 
 // int MetadataManager::save(int current_version, int delta_size, int base_pos){
