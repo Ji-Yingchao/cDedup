@@ -27,6 +27,15 @@ enum RESTORE_METHOD{
     FAA_ROLLING,    //FAA环形缓冲区
 };
 
+
+enum DEDUP_METHOD{
+    DEDUP_GLOBAL,      //普通重删（全局索引）
+    //以下都是deltaDedup
+    DEDUP_INTERVAL,    //固定间隔 
+    DEDUP_MANUAL,      //手动设置
+    DEDUP_AUTOMATIC,    //自动设置
+};
+
 class Config{
     public:
         static Config& getInstance() {
@@ -65,10 +74,10 @@ class Config{
         string getMTL5(){return this->MTL5;}
         string getMTL6(){return this->MTL6;}
 
-        bool isDeltaDedup(){return this->b_DeltaDedup;}
         int getBaseSize(){return this->base_size;}
         int getDeltaNum(){return this->delta_num;}
         int getMinDR(){return this->min_dr;}
+        enum DEDUP_METHOD getDedupMethod(){return this->dm;}
 
         // setters
         void setTask(char* s){this->tt = taskTypeTrans(s);}
@@ -101,10 +110,10 @@ class Config{
         void setMTL5(char* s){this->MTL5 = s;}
         void setMTL6(char* s){this->MTL6 = s;}
 
-        void setDeltaDedup(char* s){this->b_DeltaDedup = yesNoTrans(s);}
         void setBaseSize(int n){this->base_size = n;};
         void setDeltaNum(int n){this->delta_num = n;};
         void setMinDR(int n){this->min_dr = n;};
+        void setDedupMethod(char* s){this->dm = dedupMethodTrans(s);}
 
         // you know
         void parse_argument(int argc, char **argv)
@@ -190,14 +199,14 @@ class Config{
                     Config::getInstance().setMTL6(valuestring);
                 }
                 //3. deltaDedup configurations
-                else if (strcmp(name, "DeltaDedup") == 0) {
-                    Config::getInstance().setDeltaDedup(valuestring);
-                }else if (strcmp(name, "base_size") == 0) {
+                else if (strcmp(name, "base_size") == 0) {
                     Config::getInstance().setBaseSize(val_int);
                 }else if (strcmp(name, "delta_num") == 0) {
                     Config::getInstance().setDeltaNum(val_int);
                 }else if (strcmp(name, "min_dr") == 0) {
                     Config::getInstance().setMinDR(val_int);
+                }else if (strcmp(name, "DedupMethod") == 0) {
+                    Config::getInstance().setDedupMethod(valuestring);
                 }
             }
         }
@@ -228,12 +237,12 @@ class Config{
         string MTL1, MTL2, MTL3, MTL4, MTL5, MTL6;
 
         //打桩重删参数
-        bool b_DeltaDedup;
         int base_size;
         int delta_num;
         int min_dr;
         int retain_version_number; //系统中保留版本的个数
-        string dedup_ratio_file_path; // 之前所有版本的重删率 %
+        string dedup_ratio_file_path; // 之前所有版本的属性和重删率路径
+        enum DEDUP_METHOD dm;
 
 
         Config() {
@@ -294,6 +303,21 @@ class Config{
                 return FAA_ROLLING;
             }else{
                 printf("Not support restore method:%s\n", s);
+                exit(-1);
+            }
+        }
+
+        DEDUP_METHOD dedupMethodTrans(char* s){
+            if(strcmp(s, "global") == 0){
+                return DEDUP_GLOBAL;
+            }else if(strcmp(s, "interval") == 0){
+                return DEDUP_INTERVAL;
+            }else if (strcmp(s, "manual") == 0){
+                return DEDUP_MANUAL;
+            }else if (strcmp(s, "automatic") == 0){
+                return DEDUP_AUTOMATIC;
+            }else{
+                printf("Not support dedup method:%s\n", s);
                 exit(-1);
             }
         }

@@ -38,12 +38,8 @@ static void* read_recipe_thread(void *arg) {
 	int restore_version = Config::getInstance().getRestoreVersion();
 	string recipe_path = Config::getInstance().getFileRecipesPath();
 
-	if(Config::getInstance().isDeltaDedup()){
-		// if(Config::getInstance().getMinDR() == 0){
-		// 	GlobalMetadataManagerPtr->load(restore_version);
-		// }else{
-			GlobalMetadataManagerPtr->loadVersion(restore_version,true);
-		// }
+	if(Config::getInstance().getDedupMethod() != DEDUP_GLOBAL){
+		GlobalMetadataManagerPtr->loadVersion(restore_version,true);
 	}else{
 		GlobalMetadataManagerPtr->load();
 	}

@@ -9,6 +9,8 @@ stdbuf -oL ./cDedup conf/writeExample.json | grep -oP 'Actual DR \K[\d.]+'
 stdbuf -oL ./cDedup conf/writeExample.json | grep -oP 'Dedup Ratio \K[\d.]+'  
 ./batchrun.sh > results.txt
 
+ global interval automatic manual
+
 ## 测试恢复吞吐量
 ./cDedup conf/readExample.json
 ./batchread.sh > results.txt

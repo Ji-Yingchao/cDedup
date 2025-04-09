@@ -94,7 +94,7 @@ void *dedup_thread(void *arg) {
 	struct ENTRY_VALUE entry_value;
 	
 	//deltaDedup只实现了固定base
-	bool dd = Config::getInstance().isDeltaDedup();
+	bool dd = Config::getInstance().getDedupMethod() != DEDUP_GLOBAL;
     uint32_t current_version = getVersion(Config::getInstance().getFileRecipesPath().c_str(), "recipe");
     uint32_t base_size = Config::getInstance().getBaseSize();
     uint32_t delta_num = Config::getInstance().getDeltaNum();

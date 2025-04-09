@@ -1,9 +1,11 @@
 CC = gcc
 LIB = -lcrypto -lz -lstdc++ -llz4 -lpthread -lstdc++fs
 SRC = main.cpp ./src/fastcdc.cpp ./src/full_file_deduplicater.cpp ./src/merkle_tree.cpp \
-	  ./src/MetadataManager.cpp ./src/ContainerCache.cpp ./src/ChunkCache.cpp \
+	  ./src/MetadataManager.cpp ./src/ContainerCache.cpp ./src/ChunkCache.cpp\
+	  ./src/deltaDedup_stats.cpp ./src/recipe.cpp ./src/backup_job.cpp\
+	  ./src/deltaDedup_gc.cpp\
 	  ./src/compressor.cpp \
-      ./utils/cJSON.c \
+      ./utils/cJSON.c ./utils/metadata.cpp\
 	  ./src/pipeline.cpp ./src/pipeline_read.cpp ./src/pipeline_chunk.cpp ./src/pipeline_hash.cpp ./src/pipeline_dedup.cpp ./src/pipeline_restore.cpp\
 	  ./src/sync_queue.cpp ./src/queue.cpp ./src/jcr.cpp 
 EXE_NAME = cDedup

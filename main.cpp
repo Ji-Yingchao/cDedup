@@ -25,23 +25,16 @@
 #include "general.h"
 #include "FAA.h"
 #include "config.h"
+#include "recipe.h"
+#include "deltaDedup_stats.h"
+#include "deltaDedup_gc.h"
+#include "backup_job.h"
+#include "utils/metadata.h"
 #include "utils/cJSON.h"
 #include "compressor.h"
 #include "global_stat.h"
 #include "jcr.h"
 #include "pipeline.h"
-
-#define MB (1024*1024)
-#define GB (1024*1024*1024)
-
-struct backup_job{
-    uint64_t hash_collision_sum;
-    uint64_t sum_chunks;
-    uint64_t sum_size;
-    uint64_t dedup_chunks;
-    uint64_t dedup_size;
-    uint64_t file_num;
-};
 
 namespace fs = std::experimental::filesystem;
 
@@ -52,177 +45,6 @@ unsigned char tmp_buf[CONTAINER_SIZE]={0};
 char* global_stat_path = "/home/jyc/cDedup/global_stat.json";
 extern MetadataManager *GlobalMetadataManagerPtr;
 int (*chunking) (unsigned char*p, int n);
-struct backup_job bj;
-
-int getVersion(const char* dirPath, const std::string& prefix){
-    std::vector<int> recipe_numbers;
-    std::regex recipe_pattern(prefix + R"((\d+))");
-
-    // 遍历文件夹中的文件
-    for (const auto& entry : fs::directory_iterator(dirPath)) {
-        std::string filename = entry.path().filename().string();
-        std::smatch match;
-        if (std::regex_search(filename, match, recipe_pattern)) {
-            int number = std::stoi(match[1].str());
-            recipe_numbers.push_back(number);
-        }
-    }
-
-    // 找到最大的数字
-    if (!recipe_numbers.empty()) {
-        int last_recipe_number = *std::max_element(recipe_numbers.begin(), recipe_numbers.end());
-        return last_recipe_number+1;
-    } else {
-        return 0;
-    }
-}
-
-void saveFileRecipe(std::vector<std::string> file_recipe, const char* fileRecipesPath){
-    int n_version = getVersion(fileRecipesPath,"recipe");
-    std::string recipe_name(fileRecipesPath);
-    recipe_name.append("/recipe");
-    recipe_name.append(std::to_string(n_version));
-    int fd = open(recipe_name.data(), O_RDWR | O_CREAT, 0777);
-    if(fd < 0){ 
-        printf("saveFileRecipe open error, id %d, %s\n", errno, strerror(errno)); 
-        exit(-1);
-    }
-    for(auto x : file_recipe){
-        if(write(fd, x.data(), SHA_DIGEST_LENGTH) < 0)
-            printf("save recipe write error\n");
-    }
-    close(fd);
-}
-
-void saveDedupRatio(bool in_delta, double dr) {
-    string attr;
-    if(in_delta) attr = "delta";
-    else attr = "base";
-    string dedup_ratio_file = Config::getInstance().getDedupRatioFilePath();
-    int fd = open(dedup_ratio_file.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0777);
-    if (fd < 0) {
-        printf("saveDedupRatio open error, id %d, %s\n", errno, strerror(errno)); 
-        exit(-1);
-    }
-
-    // 将 double 转为字符串，加换行符
-    char buf[128];
-    int len = snprintf(buf, sizeof(buf), "%s\t %.4f\n", attr.c_str(),dr);
-    if (write(fd, buf, len) < 0) {
-        printf("saveDedupRatio write error, id %d, %s\n", errno, strerror(errno));
-        close(fd);
-        exit(-1);
-    }
-
-    close(fd);
-}
-
-// pair<string, double> loadDedupRatioAtLine(int target_line) {
-//     string dedup_ratio_file = Config::getInstance().getDedupRatioFilePath();
-//     ifstream infile(dedup_ratio_file);
-//     if (!infile.is_open()) {
-//         cerr << "loadDedupRatioAtLine open error" << endl;
-//         exit(-1);
-//     }
-
-//     string line;
-//     int current_line = 0;
-//     while (getline(infile, line)) {
-//         if (!line.empty()) {
-//             if (current_line == target_line) {
-//                 string attr;
-//                 double dr;
-//                 stringstream ss(line);
-//                 ss >> attr >> dr;
-//                 if (ss.fail()) {
-//                     cerr << "Failed to parse line " << target_line << ": " << line << endl;
-//                     exit(-1);
-//                 }
-//                 return {attr, dr};
-//             }
-//             current_line++;
-//         }
-//     }
-//     infile.close();
-//     cerr << "Line " << target_line << " not found in file." << endl;
-//     exit(-1);
-// }
-
-vector<pair<string, double>> loadAllDedupRatios() {
-    string dedup_ratio_file = Config::getInstance().getDedupRatioFilePath();
-    ifstream infile(dedup_ratio_file);
-    if (!infile.is_open()) {
-        cerr << "loadAllDedupRatios open error" << endl;
-        exit(-1);
-    }
-
-    vector<pair<string, double>> results;
-    string line;
-
-    while (getline(infile, line)) {
-        if (line.empty()) continue;
-
-        string attr;
-        double dr;
-        stringstream ss(line);
-        ss >> attr >> dr;
-
-        if (ss.fail()) {
-            cerr << "Failed to parse line: " << line << endl;
-            continue;  // 可选：跳过错误行而不是退出
-        }
-
-        results.emplace_back(attr, dr);
-    }
-
-    infile.close();
-    return results;
-}
-
-
-std::string getRecipeNameFromVersion(uint8_t restore_version, const char* file_recipe_path){
-    std::string recipe_name(file_recipe_path);
-    recipe_name.append("/recipe");
-    recipe_name.append(std::to_string(restore_version));
-    return recipe_name;
-}
-
-bool fileRecipeExist(uint8_t restore_version, const char* file_recipe_path){
-    if((access(getRecipeNameFromVersion(restore_version, file_recipe_path).data(), F_OK)) != -1)    
-        return true;    
- 
-    return false;
-}
-
-std::vector<std::string> getFileRecipe(uint8_t restore_version, const char* file_recipe_path){
-    if(!fileRecipeExist(restore_version, file_recipe_path)){
-        printf("Restore version %d not exist!!!\n", restore_version); 
-        exit(-1);
-    }
-
-    std::string recipe_name = getRecipeNameFromVersion(restore_version, file_recipe_path);
-    int fd = open(recipe_name.data(), O_RDONLY, 0777);
-    if(fd < 0){
-        printf("getFileRecipe open error, %s, %s\n", strerror(errno), recipe_name.data());
-        exit(-1);
-    }
-    char fp_buf[SHA_DIGEST_LENGTH]={0};
-    std::vector<std::string> ans;
-
-    while(1){
-        int n = read(fd, fp_buf, SHA_DIGEST_LENGTH);
-        if(n == 0){
-            break;
-        }else if(n < 0){
-            printf("getFileRecipe error, %s, %s\n", strerror(errno), recipe_name.data());
-            exit(-1);
-        }else{
-            ans.push_back(std::string(fp_buf, SHA_DIGEST_LENGTH));
-        }
-    }
-    close(fd);
-    return ans;
-}
 
 
 void saveContainer(int container_index, unsigned char* container_buf, unsigned int len, const char* containersPath){
@@ -269,6 +91,7 @@ void flushAssemblingBuffer(int fd, unsigned char* buf, int len){
     //close(fd);
 }
 
+
 void initChunkingAlgorithm(){
     if(Config::getInstance().getChunkingMethod() == CDC){
         int NC_level = Config::getInstance().getNormalLevel();
@@ -299,6 +122,7 @@ void initChunkingAlgorithm(){
     }
 }
 
+
 std::vector<fs::path> traverseDirectory(const fs::path& directory) {
     try {
         std::vector<fs::path> files;
@@ -319,142 +143,6 @@ std::vector<fs::path> traverseDirectory(const fs::path& directory) {
 }
 
 
-
-
-//获取该元数据所有ContainerId
-std::vector<uint32_t> getContainerIds(std::string fp_name, uint64_t file_size){
-    unsigned char* metadata_cache = (unsigned char*)malloc(FILE_CACHE);
-    int fd = open(fp_name.c_str(), O_RDONLY);
-    if(fd < 0){
-        printf("Open file %s failed\n", fp_name);
-        exit(-1);
-    }
-    
-    int n = read(fd, metadata_cache, FILE_CACHE);
-    int meta_size = sizeof(SHA1FP) + sizeof(ENTRY_VALUE);
-    int entry_count = n/meta_size;
-    ENTRY_VALUE tmp_value;
-    std::vector<uint32_t> ans;
-
-    //统计存储大小
-    uint64_t stored_size = 0;
-
-    for(int i=0; i<=entry_count-1; i++){
-        memcpy(&tmp_value, metadata_cache+i*meta_size + sizeof(SHA1FP), sizeof(ENTRY_VALUE));
-        stored_size += tmp_value.chunk_length;
-        auto it = std::find(ans.begin(), ans.end(), tmp_value.container_number);
-        if(it == ans.end()){
-            ans.push_back(tmp_value.container_number);
-        }
-    }
-
-    printf("stored container size %.2fGB\n", (float)(ans.size()*CONTAINER_SIZE)/GB);
-    printf("stored size %.2fGB\n", (float)(stored_size)/GB);
-    
-    // 用于统计重删率
-    bj.dedup_size = bj.dedup_size - file_size + stored_size;
-    
-    close(fd);
-    free(metadata_cache);
-    return ans;
-}
-
-void deleteFile(int delete_version,bool in_delta){
-    string recipe_path = Config::getInstance().getFileRecipesPath();
-    if(!fileRecipeExist(delete_version, recipe_path.c_str())){
-        printf("Version %d not exist!\n", delete_version);
-        exit(-1);
-    }
-    printf("-------------Begin to delete file version %d-----------\n",delete_version);
-    struct timeval delete_time_start, delete_time_end;  
-    gettimeofday(&delete_time_start, NULL);
-
-    
-    std::vector<std::string> file_recipe = getFileRecipe(delete_version,
-                                                        Config::getInstance().getFileRecipesPath().c_str());
-    uint64_t file_size = 0;
-    
-    std::string fp_name;
-    if(Config::getInstance().isDeltaDedup()){
-        GlobalMetadataManagerPtr->loadVersion(delete_version,true);
-        SHA1FP fp;
-        ENTRY_VALUE ev;
-        for(auto &x : file_recipe){
-            memcpy(&fp, x.data(), sizeof(SHA1FP));
-            ev = GlobalMetadataManagerPtr->getEntry(fp);
-            file_size += ev.chunk_length;
-        }
-
-        fp_name = GlobalMetadataManagerPtr->genFPname(delete_version, !in_delta);
-        std::vector<uint32_t> ids = getContainerIds(fp_name, file_size);
-        for(auto &id: ids){
-            //移除container
-            uint32_t container_index = id;
-            std::string container_name(Config::getInstance().getContainersPath().c_str());
-            container_name.append("/container");
-            container_name.append(std::to_string(container_index));
-            remove(container_name.c_str());  
-        }
-        //移除fingerprint
-        remove(fp_name.c_str());
-    }else{
-        //普通重删的删除未实现
-        fp_name = Config::getInstance().getFingerprintsFilePath().c_str();
-        printf("其他方案的删除尚未实现\n");
-        exit(-1);
-    }
-
-    //移除recipe
-    std::string recipe_name(recipe_path);
-    recipe_name.append("/recipe");
-    recipe_name.append(std::to_string(delete_version));
-    remove(recipe_name.c_str());
-    
-    bj.sum_size = bj.sum_size - file_size;
-    gettimeofday(&delete_time_end, NULL);
-
-    uint64_t single_delete_time_us = (delete_time_end.tv_sec - delete_time_start.tv_sec) * 1000000 + 
-                                        delete_time_end.tv_usec - delete_time_start.tv_usec;
-    printf("Delete time %.2f s\n",(float)(single_delete_time_us)/1000000);
-}
-
-// DeltaDedup-保留最近n个版本的删除（固定长度的删除）
-void do_delete(int current_version){
-    int retain_version_number = Config::getInstance().getRetainVersionNumber();
-    if(retain_version_number>=0 && current_version >= retain_version_number){
-        int delete_version = current_version - Config::getInstance().getRetainVersionNumber();
-
-        // DeltaDedup和普通删除不同
-        if(Config::getInstance().isDeltaDedup()){
-            // uint32_t base_size = Config::getInstance().getBaseSize();
-            // uint32_t delta_num = Config::getInstance().getDeltaNum();
-            // bool in_delta = (delete_version % (base_size + delta_num)) > (base_size-1);
-            vector<pair<string, double>> dr_vec = loadAllDedupRatios();
-            auto [attr, dr] = dr_vec.at(delete_version);
-            bool in_delta = (attr == "delta");
-            
-            if(in_delta){
-                deleteFile(delete_version, true);
-                //如果连续删除，删掉最后一个delta版本之后，删除该版本对应的base
-                // if(delete_version % (base_size+delta_num) == delta_num){
-                //     deleteFile(delete_version-delta_num, false);
-                // }
-                if(delete_version+1 < dr_vec.size() && dr_vec.at(delete_version+1).first == "base"){
-                    //deleteFile(delete_version-1,false);
-                    for (int i = delete_version - 1; i >= 0; --i) {
-                        if (dr_vec[i].first == "base") {
-                            deleteFile(i,false); //删除对应的base
-                            break;
-                        }
-                    }
-                }
-            }
-        }else{
-            //deleteFile(delete_version,true);
-        }
-        
-    }
-}
 
 void writeFile(string path){
     int idf = open(path.c_str(), O_RDONLY, 0777);
@@ -491,7 +179,7 @@ void writeFile(string path){
     uint64_t hash_collision_sum = 0;
 
     // delta重删
-    bool dd = Config::getInstance().isDeltaDedup();
+    bool dd = Config::getInstance().getDedupMethod() != DEDUP_GLOBAL;
     uint32_t current_version = getVersion(Config::getInstance().getFileRecipesPath().c_str(), "recipe");
     uint32_t base_size = Config::getInstance().getBaseSize();
     uint32_t delta_num = Config::getInstance().getDeltaNum();
@@ -500,21 +188,14 @@ void writeFile(string path){
     // uint32_t max_destination_base = min_destination_base + base_size - 1;
     
     bool in_delta = false, clear_base = true;
-    
     if(min_dr == 0){
         in_delta = (current_version % (base_size + delta_num)) > (base_size-1);
-    }else if(min_dr != 0){
-        if(current_version != 0){
-            vector<pair<string, double>> dr_vec = loadAllDedupRatios();
-            auto [attr, dr] = dr_vec.at(current_version-1);
-            //auto [attr, dr] = loadDedupRatioAtLine(current_version-1);
-            clear_base = dr < (double)min_dr/100 && attr == "delta";
-        }
-        if(clear_base){
-            in_delta = false;
-        }else{
-            in_delta = true;
-        }
+    }else if(current_version != 0){                                 //版本0，初始值满足动态要求
+        vector<pair<string, double>> dr_vec = loadAllDedupRatios();
+        auto [attr, dr] = dr_vec.at(current_version-1);
+        clear_base = dr < (double)min_dr/100 && attr == "delta";
+
+        in_delta = !clear_base; //清除base的fp后，in_delta必为false
     }
 
     if(dd && in_delta){
@@ -622,13 +303,9 @@ void writeFile(string path){
     bj.hash_collision_sum += hash_collision_sum;
     bj.file_num++;
 
-    // 保存指纹元数据
+    // save fp&entry metadata
     if(dd){
         if(min_dr == 0){
-            if(current_version == min_destination_base)
-                in_delta = false;
-            else if(current_version <= min_destination_base + delta_num)
-                in_delta = true;
             if(current_version == min_destination_base + delta_num)
                 clear_base = true;
         }else if(min_dr > 0){
@@ -680,7 +357,7 @@ int main(int argc, char** argv){
     if(Config::getInstance().getTaskType() == TASK_WRITE){
         int current_version = getVersion(Config::getInstance().getFileRecipesPath().c_str(), "recipe");
         if(current_version != 0){
-            if(!Config::getInstance().isDeltaDedup()){
+            if(Config::getInstance().getDedupMethod() == DEDUP_GLOBAL){
                 GlobalMetadataManagerPtr->load();
             }
         }
@@ -735,10 +412,10 @@ int main(int argc, char** argv){
         int restore_version = Config::getInstance().getRestoreVersion();
         string recipe_path = Config::getInstance().getFileRecipesPath();
 
-        if(Config::getInstance().isDeltaDedup()){ 
-            GlobalMetadataManagerPtr->loadVersion(restore_version,true);
-        }else{
+        if(Config::getInstance().getDedupMethod() == DEDUP_GLOBAL){
             GlobalMetadataManagerPtr->load();
+        }else{
+            GlobalMetadataManagerPtr->loadVersion(restore_version,true);
         }
 
         int base_container_max_value = GlobalMetadataManagerPtr->getBaseContainerMaxValue();
@@ -912,8 +589,7 @@ int main(int argc, char** argv){
         // 仅实现固定DeltaDedup的删除
         int delete_version = Config::getInstance().getDeleteVersion();
 
-        bool dd = Config::getInstance().isDeltaDedup();
-        if(!dd){
+        if(Config::getInstance().getDedupMethod() == DEDUP_GLOBAL){
             printf("暂不支持DeltaDedup以外的删除方案\n");
             exit(-1);
         }
