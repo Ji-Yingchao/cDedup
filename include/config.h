@@ -66,6 +66,7 @@ class Config{
         string getFullFileFingerprintsPath(){return this->full_file_fingerprints_path;}        
         string getFullFileStoragePath(){return this->full_file_storage_path;}
         string getDedupRatioFilePath(){return this->dedup_ratio_file_path;}
+        string getDeltaConfigFilePath(){return this->delta_config_file_path;}
 
         string getMTL1(){return this->MTL1;}
         string getMTL2(){return this->MTL2;}
@@ -102,6 +103,7 @@ class Config{
         void setFullFileFingerprintsPath(char* s){this->full_file_fingerprints_path = s;}        
         void setFullFileStoragePath(char* s){this->full_file_storage_path = s;}
         void setDedupRatioFilePath(char* s){this->dedup_ratio_file_path = s;}
+        void setDeltaConfigFilePath(char* s){this->delta_config_file_path = s;}
 
         void setMTL1(char* s){this->MTL1 = s;}
         void setMTL2(char* s){this->MTL2 = s;}
@@ -184,6 +186,8 @@ class Config{
                     Config::getInstance().setFullFileStoragePath(valuestring);
                 } else if (strcmp(name, "dedupRatioFilePath") == 0) {
                     Config::getInstance().setDedupRatioFilePath(valuestring);
+                }else if (strcmp(name, "deltaConfigFilePath") == 0) {
+                    Config::getInstance().setDeltaConfigFilePath(valuestring);
                 }
                 else if (strcmp(name, "MTL1") == 0) {
                     Config::getInstance().setMTL1(valuestring);
@@ -236,13 +240,15 @@ class Config{
         string full_file_storage_path;
         string MTL1, MTL2, MTL3, MTL4, MTL5, MTL6;
 
-        //打桩重删参数
-        int base_size;
-        int delta_num;
-        int min_dr;
-        int retain_version_number; //系统中保留版本的个数
-        string dedup_ratio_file_path; // 之前所有版本的属性和重删率路径
+        // 打桩重删参数
         enum DEDUP_METHOD dm;
+        int base_size;    // DEDUP_INTERVAL参数
+        int delta_num;
+        int min_dr;       // DEDUP_AUTOMATIC参数 
+        string dedup_ratio_file_path;   // 写入历史版本的属性和重删率
+        string delta_config_file_path;  // DEDUP_MANUAL参数   delta或base的设置文件路径
+
+        int retain_version_number;      //系统中保留版本的个数
 
 
         Config() {

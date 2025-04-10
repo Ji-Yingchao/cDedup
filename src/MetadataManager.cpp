@@ -1,6 +1,7 @@
 #include "MetadataManager.h"
 #include "config.h"
-#include "assert.h" 
+#include "assert.h"
+#include "deltaDedup_stats.h" 
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -17,13 +18,7 @@ MetadataManager *GlobalMetadataManagerPtr;
 
 int MetadataManager::saveVersion(int current_version, bool in_delta){
     //printf("-----------------------Saving One File FP-index-----------------------\n");
-    std::string fp_name(Config::getInstance().getFpDeltaDedupFolderPath());
-    fp_name.append("/fp_");
-    fp_name.append(std::to_string(current_version));
-    if(!in_delta)
-        fp_name.append("_base");
-    else
-        fp_name.append("_delta");
+    std::string fp_name = genFPname(current_version, in_delta);
 
     int fd = open(fp_name.c_str(), O_RDWR | O_CREAT, 0777);
     if(fd < 0){
@@ -31,19 +26,15 @@ int MetadataManager::saveVersion(int current_version, bool in_delta){
         exit(-1);
     }
 
-    int count = 0;
     if(!in_delta){
         for(auto item : this->fp_table_base){
             write(fd, (uint8_t*)&item.first, sizeof(SHA1FP));
             write(fd, (uint8_t*)&item.second, sizeof(ENTRY_VALUE));
-            count++;
         }
     }else if(in_delta){
         for(auto item : this->fp_table_delta){
-            int n = 0;
             write(fd, (uint8_t*)&item.first, sizeof(SHA1FP));
             write(fd, (uint8_t*)&item.second, sizeof(ENTRY_VALUE));
-            count++;
         }
     }else{
         printf("Saving fp error\n");
@@ -55,89 +46,34 @@ int MetadataManager::saveVersion(int current_version, bool in_delta){
     return 0;
 }
 
-string MetadataManager::genFPname(int version, bool base){
+string MetadataManager::genFPname(int version, bool in_delta){
     std::string fp_name(Config::getInstance().getFpDeltaDedupFolderPath());
     fp_name.append("/fp_");
     fp_name.append(std::to_string(version));
-    if(base)
-        fp_name.append("_base");
-    else
+    if(in_delta)
         fp_name.append("_delta");
+    else
+        fp_name.append("_base");
     return fp_name;
 }
 
 
-std::string getFPname(const std::string& partial_name) {
-    for (const auto& entry : fs::recursive_directory_iterator
-    (Config::getInstance().getFpDeltaDedupFolderPath())) {
-        std::string file_name = entry.path().filename().string();
-        if (file_name.find(partial_name) != std::string::npos) {
-            return entry.path().string();
-        }
-    }
-
-    return "";
-}
-
-// 提取文件名中的数字部分
-int extractNumber(const std::string& filename) {
-    std::regex re("fp_(\\d+)_.*");
-    std::smatch match;
-    if (std::regex_match(filename, match, re)) {
-        return std::stoi(match[1]);
-    }
-    return -1; // 如果无法提取数字，返回-1
-}
-
-// 按文件名中的数字部分排序
-bool compareFiles(const fs::path& a, const fs::path& b) {
-    int numA = extractNumber(a.filename().string());
-    int numB = extractNumber(b.filename().string());
-    return numA < numB;
-}
-
-std::string findBaseFile(const std::string& delta_file) {
-    std::vector<fs::path> files_path;
-    for (const auto& entry : fs::directory_iterator
-    (Config::getInstance().getFpDeltaDedupFolderPath())) {
-        files_path.push_back(entry.path());
-    }
-
-    // 排序
-    std::sort(files_path.begin(), files_path.end(), compareFiles);
-    auto it = std::find(files_path.begin(), files_path.end(), delta_file);
-    if (it != files_path.end()) {
-        for (--it; ; --it) {
-            std::string filename = it->filename().string();
-            if (filename.find("base") != std::string::npos) {
-                return it->string();
-            }
-            if(it == files_path.begin())   break;
-        }
-    }
-    return "";
-}
-
-// 通过文件名加载指纹数据
+// DEDEUP_DELTA load fp&entry
 int MetadataManager::loadVersion(int version, bool is_restore){
     // 恢复时：如果该版本是base，只需加载base的fp；如果该版本是delta，需要加载它前面一个base的fp和它自己的fp
     // 写入时：如果该版本是base，不需要加载fp；如果该版本是delta，需要加载它前面一个base的fp
-    std::string fp_name("fp_");
-    fp_name.append(std::to_string(version));
-    fp_name.append("_");
-    fp_name = getFPname(fp_name);
-    if(fp_name.empty()){
-        printf("Loading fp error\n");
-        exit(-1);
-    }
+    vector<pair<string, double>> attr_vec = loadAllDedupRatios();
+    auto [attr, dr] = attr_vec.at(version);
+    bool in_delta = attr == "delta";
     
-    size_t pos = fp_name.find_last_of('/');
-    if(fp_name.substr(pos + 1).find("base") != std::string::npos){
+    string fp_name = genFPname(version, in_delta);
+    if(!in_delta){
         // printf("Length of fp_table_origin: %d\n", this->fp_table_origin.size());
         loadDeltaDedupFp(fp_name,is_restore);
     }else{
         // 如果是写入加载元数据，不需要加载delta版本的fp
-        string base_file = findBaseFile(fp_name);
+        int base_file_version = findNearestBaseBefore(attr_vec, version);
+        string base_file = genFPname(base_file_version, false);
         loadDeltaDedupFp(base_file,is_restore);
         if(is_restore){
             loadDeltaDedupFp(fp_name,is_restore);

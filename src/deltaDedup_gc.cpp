@@ -41,7 +41,7 @@ void deleteFile(int delete_version,bool in_delta){
             file_size += ev.chunk_length;
         }
 
-        fp_name = GlobalMetadataManagerPtr->genFPname(delete_version, !in_delta);
+        fp_name = GlobalMetadataManagerPtr->genFPname(delete_version, in_delta);
         std::vector<uint32_t> ids = getContainerIds(fp_name, file_size);
         for(auto &id: ids){
             //移除container
@@ -83,9 +83,6 @@ void do_delete(int current_version){
 
         // DeltaDedup和普通删除不同
         if(Config::getInstance().getDedupMethod() != DEDUP_GLOBAL){
-            // uint32_t base_size = Config::getInstance().getBaseSize();
-            // uint32_t delta_num = Config::getInstance().getDeltaNum();
-            // bool in_delta = (delete_version % (base_size + delta_num)) > (base_size-1);
             vector<pair<string, double>> dr_vec = loadAllDedupRatios();
             auto [attr, dr] = dr_vec.at(delete_version);
             bool in_delta = (attr == "delta");
@@ -93,20 +90,14 @@ void do_delete(int current_version){
             if(in_delta){
                 deleteFile(delete_version, true);
                 //如果连续删除，删掉最后一个delta版本之后，删除该版本对应的base
-                // if(delete_version % (base_size+delta_num) == delta_num){
-                //     deleteFile(delete_version-delta_num, false);
-                // }
                 if(delete_version+1 < dr_vec.size() && dr_vec.at(delete_version+1).first == "base"){
                     //deleteFile(delete_version-1,false);
-                    for (int i = delete_version - 1; i >= 0; --i) {
-                        if (dr_vec[i].first == "base") {
-                            deleteFile(i,false); //删除对应的base
-                            break;
-                        }
-                    }
+                    int last_base_version = findNearestBaseBefore(dr_vec, delete_version);
+                    deleteFile(last_base_version, false);    //删除对应的base
                 }
             }
-        }else{
+        }
+        else{
             //deleteFile(delete_version,true);
         }
         

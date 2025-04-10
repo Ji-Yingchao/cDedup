@@ -183,7 +183,7 @@ void writeFile(string path){
     uint32_t current_version = getVersion(Config::getInstance().getFileRecipesPath().c_str(), "recipe");
     // uint32_t max_destination_base = min_destination_base + base_size - 1;
     
-    bool in_delta = false, clear_base = true;
+    bool in_delta = false;
     if(dedupMethod == DEDUP_INTERVAL){
         uint32_t base_size = Config::getInstance().getBaseSize();
         uint32_t delta_num = Config::getInstance().getDeltaNum();
@@ -193,16 +193,21 @@ void writeFile(string path){
         if(current_version == min_destination_base + delta_num)
             GlobalMetadataManagerPtr->clear_base();
     }
-    //版本0，初始值满足动态要求
-    else if(dedupMethod == DEDUP_AUTOMATIC && current_version != 0){    
+    else if(dedupMethod == DEDUP_AUTOMATIC && current_version != 0){    //版本0,in_delta初始值满足动态要求
         uint32_t min_dr = Config::getInstance().getMinDR(); 
-        vector<pair<string, double>> dr_vec = loadAllDedupRatios();
-        auto [attr, dr] = dr_vec.at(current_version-1);
-        clear_base = dr < (double)min_dr/100 && attr == "delta";
+        auto [attr, dr] = loadDedupRatioAtLine(current_version-1);
+        bool clear_base = dr < (double)min_dr/100 && attr == "delta";
         if(clear_base)
             GlobalMetadataManagerPtr->clear_base();
 
         in_delta = !clear_base; //清除base的fp后，in_delta必为false
+    }
+    else if(dedupMethod == DEDUP_MANUAL){
+        vector<string> attrs = loadDeltaAttrs();
+        in_delta = attrs.at(current_version) == "delta";
+
+        if(current_version+1 < attrs.size() && attrs.at(current_version+1) == "base")
+            GlobalMetadataManagerPtr->clear_base();
     }
 
     // load metadata
@@ -428,15 +433,9 @@ int main(int argc, char** argv){
         struct timeval restore_time_start, restore_time_end;
         gettimeofday(&restore_time_start, NULL);
 
-        if(!fileRecipeExist(restore_version, recipe_path.c_str())){
-            printf("Version %d not exist!\n", restore_version);
-            return 0;
-        }
-
-        // unsigned char* assembling_buffer = (unsigned char*)malloc(FILE_CACHE);
-        unsigned char* assembling_buffer;
-        posix_memalign((void**)&assembling_buffer, SECTOR_SIZE, FILE_CACHE);
-
+        // unsigned char* assembling_buffer;
+        // posix_memalign((void**)&assembling_buffer, SECTOR_SIZE, FILE_CACHE);
+        unsigned char* assembling_buffer = (unsigned char*)malloc(FILE_CACHE);
         memset(assembling_buffer, 0, FILE_CACHE);
         int write_buffer_offset = 0;
         uint64_t restored_size = 0;
@@ -444,8 +443,7 @@ int main(int argc, char** argv){
         uint64_t reference_containers_count = 0;
 
         //recipe
-        std::vector<std::string> file_recipe = getFileRecipe(Config::getInstance().getRestoreVersion(),
-                                                             Config::getInstance().getFileRecipesPath().c_str());
+        std::vector<std::string> file_recipe = getFileRecipe(restore_version, recipe_path.c_str());
 
         //组装
         RESTORE_METHOD rm = Config::getInstance().getRestoreMethod();

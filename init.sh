@@ -2,8 +2,9 @@
 # 这里的配置需要和参数json一致
 
 BACK_DIR=/home/jyc/hdd/deltaworking/
-rm -rf ${BACK_DIR}
-mkdir ${BACK_DIR}
+rm -rf ${BACK_DIR}/Containers
+rm -rf ${BACK_DIR}/metadata
+# mkdir ${BACK_DIR}
 mkdir ${BACK_DIR}/Containers
 mkdir ${BACK_DIR}/metadata
 mkdir ${BACK_DIR}/metadata/FileRecipes
