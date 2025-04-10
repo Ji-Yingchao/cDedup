@@ -8,17 +8,13 @@
 #include <string.h>
 #include <algorithm>
 #include <regex>
-#include <experimental/filesystem>
 
-#include <fstream>
-
-namespace fs = std::experimental::filesystem;
 
 MetadataManager *GlobalMetadataManagerPtr;
 
-int MetadataManager::saveVersion(int current_version, bool in_delta){
+int MetadataManager::saveVersion(int current_version, FILE_ATTR file_attr){
     //printf("-----------------------Saving One File FP-index-----------------------\n");
-    std::string fp_name = genFPname(current_version, in_delta);
+    std::string fp_name = genFPname(current_version, file_attr);
 
     int fd = open(fp_name.c_str(), O_RDWR | O_CREAT, 0777);
     if(fd < 0){
@@ -26,12 +22,12 @@ int MetadataManager::saveVersion(int current_version, bool in_delta){
         exit(-1);
     }
 
-    if(!in_delta){
+    if(file_attr == ATTR_BASE){
         for(auto item : this->fp_table_base){
             write(fd, (uint8_t*)&item.first, sizeof(SHA1FP));
             write(fd, (uint8_t*)&item.second, sizeof(ENTRY_VALUE));
         }
-    }else if(in_delta){
+    }else if(file_attr == ATTR_DELTA){
         for(auto item : this->fp_table_delta){
             write(fd, (uint8_t*)&item.first, sizeof(SHA1FP));
             write(fd, (uint8_t*)&item.second, sizeof(ENTRY_VALUE));
@@ -46,11 +42,11 @@ int MetadataManager::saveVersion(int current_version, bool in_delta){
     return 0;
 }
 
-string MetadataManager::genFPname(int version, bool in_delta){
+string MetadataManager::genFPname(int version, FILE_ATTR file_attr){
     std::string fp_name(Config::getInstance().getFpDeltaDedupFolderPath());
     fp_name.append("/fp_");
     fp_name.append(std::to_string(version));
-    if(in_delta)
+    if(file_attr == ATTR_DELTA)
         fp_name.append("_delta");
     else
         fp_name.append("_base");
@@ -64,16 +60,17 @@ int MetadataManager::loadVersion(int version, bool is_restore){
     // 写入时：如果该版本是base，不需要加载fp；如果该版本是delta，需要加载它前面一个base的fp
     vector<pair<string, double>> attr_vec = loadAllDedupRatios();
     auto [attr, dr] = attr_vec.at(version);
-    bool in_delta = attr == "delta";
-    
-    string fp_name = genFPname(version, in_delta);
-    if(!in_delta){
+    //bool in_delta = attr == "delta";
+    FILE_ATTR file_attr = string_to_attr(attr);
+
+    string fp_name = genFPname(version, file_attr);
+    if(file_attr == ATTR_BASE){
         // printf("Length of fp_table_origin: %d\n", this->fp_table_origin.size());
         loadDeltaDedupFp(fp_name,is_restore);
     }else{
         // 如果是写入加载元数据，不需要加载delta版本的fp
         int base_file_version = findNearestBaseBefore(attr_vec, version);
-        string base_file = genFPname(base_file_version, false);
+        string base_file = genFPname(base_file_version, ATTR_BASE);
         loadDeltaDedupFp(base_file,is_restore);
         if(is_restore){
             loadDeltaDedupFp(fp_name,is_restore);
@@ -192,7 +189,7 @@ LookupResult MetadataManager::dedupLookup(SHA1FP sha1){
     return Unique;
 }
 
-LookupResult MetadataManager::dedupLookup(SHA1FP sha1, bool in_delta){
+LookupResult MetadataManager::dedupLookup(SHA1FP sha1, FILE_ATTR file_attr){
     auto dedupIter = this->fp_table_base.find(sha1);
     if(dedupIter != this->fp_table_base.end())
         return Dedup;
@@ -210,8 +207,8 @@ int MetadataManager::addNewEntry(SHA1FP sha1, ENTRY_VALUE value){
     return 0;
 }
 
-int MetadataManager::addNewEntry(SHA1FP sha1, ENTRY_VALUE value, bool in_delta){
-    if(in_delta)
+int MetadataManager::addNewEntry(SHA1FP sha1, ENTRY_VALUE value, FILE_ATTR file_attr){
+    if(file_attr == ATTR_DELTA)
         this->fp_table_delta.emplace(sha1, value);
     else    
         this->fp_table_base.emplace(sha1, value);

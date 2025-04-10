@@ -10,8 +10,9 @@
 
 using namespace std;
 
-void saveDedupRatio(bool in_delta, double dr) {
-    string attr = in_delta ? "delta" : "base";
+void saveDedupRatio(FILE_ATTR file_attr, double dr) {
+    //string attr = in_delta ? "delta" : "base";
+    string attr = attr_to_string(file_attr);
     string dedup_ratio_file = Config::getInstance().getDedupRatioFilePath();
     int fd = open(dedup_ratio_file.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0777);
     if (fd < 0) {
@@ -154,4 +155,23 @@ vector<string> loadDeltaAttrs(){
 
     infile.close();
     return attrs;
+}
+
+
+// 枚举值转字符串
+std::string attr_to_string(FILE_ATTR attr) {
+    switch (attr) {
+        case ATTR_BASE: return "base";
+        case ATTR_SLBASE: return "slbase";
+        case ATTR_DELTA: return "delta";
+        default: throw std::invalid_argument("Unknown FILE_ATTR value");
+    }
+}
+
+// 字符串转枚举值
+FILE_ATTR string_to_attr(const std::string& str) {
+    if (str == "base") return ATTR_BASE;
+    if (str == "slbase") return ATTR_SLBASE;
+    if (str == "delta") return ATTR_DELTA;
+    throw std::invalid_argument("Unknown FILE_ATTR string");
 }

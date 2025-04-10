@@ -1,5 +1,7 @@
 .vscode
 ./utils/*
+./test/*
+./conf/*
 Containers
 ContainersGZIP
 FileRecipes

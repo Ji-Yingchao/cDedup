@@ -15,7 +15,7 @@
 
 extern MetadataManager *GlobalMetadataManagerPtr;
 
-void deleteFile(int delete_version,bool in_delta){
+void deleteFile(int delete_version,FILE_ATTR file_attr){
     string recipe_path = Config::getInstance().getFileRecipesPath();
     if(!fileRecipeExist(delete_version, recipe_path.c_str())){
         printf("Version %d not exist!\n", delete_version);
@@ -41,7 +41,7 @@ void deleteFile(int delete_version,bool in_delta){
             file_size += ev.chunk_length;
         }
 
-        fp_name = GlobalMetadataManagerPtr->genFPname(delete_version, in_delta);
+        fp_name = GlobalMetadataManagerPtr->genFPname(delete_version, file_attr);
         std::vector<uint32_t> ids = getContainerIds(fp_name, file_size);
         for(auto &id: ids){
             //移除container
@@ -85,15 +85,15 @@ void do_delete(int current_version){
         if(Config::getInstance().getDedupMethod() != DEDUP_GLOBAL){
             vector<pair<string, double>> dr_vec = loadAllDedupRatios();
             auto [attr, dr] = dr_vec.at(delete_version);
-            bool in_delta = (attr == "delta");
+            //bool in_delta = (attr == "delta");
             
-            if(in_delta){
-                deleteFile(delete_version, true);
+            if(attr == "delta"){
+                deleteFile(delete_version, ATTR_DELTA);
                 //如果连续删除，删掉最后一个delta版本之后，删除该版本对应的base
                 if(delete_version+1 < dr_vec.size() && dr_vec.at(delete_version+1).first == "base"){
                     //deleteFile(delete_version-1,false);
                     int last_base_version = findNearestBaseBefore(dr_vec, delete_version);
-                    deleteFile(last_base_version, false);    //删除对应的base
+                    deleteFile(last_base_version, ATTR_BASE);    //删除对应的base
                 }
             }
         }

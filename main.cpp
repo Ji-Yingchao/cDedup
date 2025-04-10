@@ -183,11 +183,13 @@ void writeFile(string path){
     uint32_t current_version = getVersion(Config::getInstance().getFileRecipesPath().c_str(), "recipe");
     // uint32_t max_destination_base = min_destination_base + base_size - 1;
     
-    bool in_delta = false;
+    //bool in_delta = false;
+    FILE_ATTR file_attr;
     if(dedupMethod == DEDUP_INTERVAL){
         uint32_t base_size = Config::getInstance().getBaseSize();
         uint32_t delta_num = Config::getInstance().getDeltaNum();
-        in_delta = (current_version % (base_size + delta_num)) > (base_size-1);
+        file_attr = (current_version % (base_size + delta_num)) > (base_size-1) ? ATTR_DELTA:ATTR_BASE;
+        //in_delta = (current_version % (base_size + delta_num)) > (base_size-1);
 
         uint32_t min_destination_base = current_version -  current_version % (base_size + delta_num);
         if(current_version == min_destination_base + delta_num)
@@ -200,11 +202,13 @@ void writeFile(string path){
         if(clear_base)
             GlobalMetadataManagerPtr->clear_base();
 
-        in_delta = !clear_base; //清除base的fp后，in_delta必为false
+        //in_delta = !clear_base; //清除base的fp后，下一个必是base
+        file_attr = clear_base ? ATTR_BASE : ATTR_DELTA;
     }
     else if(dedupMethod == DEDUP_MANUAL){
         vector<string> attrs = loadDeltaAttrs();
-        in_delta = attrs.at(current_version) == "delta";
+        // in_delta = attrs.at(current_version) == "delta";
+        file_attr = attrs.at(current_version) == "delta" ? ATTR_DELTA:ATTR_BASE;
 
         if(current_version+1 < attrs.size() && attrs.at(current_version+1) == "base")
             GlobalMetadataManagerPtr->clear_base();
@@ -215,7 +219,7 @@ void writeFile(string path){
         if(dedupMethod == DEDUP_GLOBAL){
             GlobalMetadataManagerPtr->load();
         }
-        else if(in_delta){
+        else if(file_attr == ATTR_DELTA){
             GlobalMetadataManagerPtr->loadVersion(current_version-1,false);
         }
     }
@@ -245,7 +249,7 @@ void writeFile(string path){
             if(dedupMethod == DEDUP_GLOBAL)
                 lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp);
             else
-                lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp, in_delta); 
+                lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp, file_attr); 
 
             //ReWrite
 
@@ -269,7 +273,7 @@ void writeFile(string path){
                 if(dedupMethod == DEDUP_GLOBAL){
                     GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value);
                 }else{
-                    GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value, in_delta);
+                    GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value, file_attr);
                 }
 
                 // rev
@@ -315,7 +319,7 @@ void writeFile(string path){
     
     // save dedup ratio
     if(dedupMethod != DEDUP_GLOBAL){
-        saveDedupRatio(in_delta,cur_dr);
+        saveDedupRatio(file_attr,cur_dr);
     }
     
     // update backup job
@@ -330,7 +334,7 @@ void writeFile(string path){
     if(dedupMethod == DEDUP_GLOBAL){
         GlobalMetadataManagerPtr->save();
     }else{
-        GlobalMetadataManagerPtr->saveVersion(current_version, in_delta);
+        GlobalMetadataManagerPtr->saveVersion(current_version, file_attr);
     }
 
     do_delete(current_version);
@@ -400,13 +404,7 @@ int main(int argc, char** argv){
         float throughput = (float)(bj.sum_size) / MB / ((float)(single_dedup_time_us)/1000000);
 
         // 写文件 - 重删统计
-        printf("-----------------------Dedup statics----------------------\n");
-        printf("Hash collision num %" PRIu64 "\n",    bj.hash_collision_sum); // should be zero
-        printf("Sum chunks num % " PRIu64 "\n",       bj.sum_chunks);
-        printf("Sum data size %" PRIu64 "\n",         bj.sum_size);
-        printf("Average chunk size %" PRIu64 "\n",    bj.sum_size / bj.sum_chunks);
-        printf("Dedup chunks num %" PRIu64 "\n",      bj.dedup_chunks);
-        printf("Dedup data size %" PRIu64 "\n",       bj.dedup_size);
+        print_backup_job(bj);
         printf("-----------------------statics----------------------\n");
         printf("Throughput %.2f MiB/s\n",    throughput);
         //printf("Dedup Ratio %.2f%\n",     double(bj.dedup_size) / double(bj.sum_size) *100);
@@ -598,13 +596,13 @@ int main(int argc, char** argv){
 
         uint32_t base_size = Config::getInstance().getBaseSize();
         uint32_t delta_num = Config::getInstance().getDeltaNum();
-        bool in_delta = (delete_version % (base_size + delta_num)) > (base_size-1);
-        if(in_delta){
-            deleteFile(delete_version, true);
+        FILE_ATTR attr = (delete_version % (base_size + delta_num)) > (base_size-1) ? ATTR_DELTA:ATTR_BASE;
+        if(attr == ATTR_DELTA){
+            deleteFile(delete_version, ATTR_DELTA);
 
             //如果连续删除，删掉最后一个delta版本之后，删除该版本对应的base
             if(delete_version % (base_size+delta_num) == delta_num){
-                deleteFile(delete_version-delta_num, false);
+                deleteFile(delete_version-delta_num, ATTR_BASE);
             }
         }
 

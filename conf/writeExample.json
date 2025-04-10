@@ -1,6 +1,6 @@
 {
   "Task": "write",
-  "InputFile": "/home/jyc/ssd/dataset/LLVM/llvmorg-13-init.tar",
+  "InputFile": "/home/jyc/ssd/dataset/LLVM/llvmorg-17.0.2.tar",
   "ChunkingMethod": "cdc",
   "Size": 4096,
   "Normal": 2,
@@ -11,7 +11,7 @@
   "fingerprintsDeltaDedupFolder": "/home/jyc/hdd/deltaworking/metadata/fingerprintsDeltaDedup",
   "dedupRatioFilePath": "/home/jyc/hdd/deltaworking/metadata/deltaHistoryDR.txt",
   "deltaConfigFilePath": "/home/jyc/hdd/deltaworking/deltaConfig.txt",
-  "DedupMethod": "interval",
+  "DedupMethod": "automatic",
   "RetainVersionNumber": 1,
   "base_size": 1,
   "delta_num": 9,

@@ -5,6 +5,7 @@
 #include <iostream>
 #include <unordered_map>
 #include "general.h"
+#include "deltaDedup_stats.h"
 
 enum LookupResult {
     Unique,
@@ -65,7 +66,7 @@ class MetadataManager {
         }
 
         int save();
-        int saveVersion(int, bool);
+        int saveVersion(int, FILE_ATTR);
 
         // 普通加载元数据，只支持目录批量一次性写入
         int load();
@@ -73,13 +74,13 @@ class MetadataManager {
         int loadVersion(int version, bool is_restore);
         
         LookupResult dedupLookup(SHA1FP sha1);
-        LookupResult dedupLookup(SHA1FP sha1, bool);
+        LookupResult dedupLookup(SHA1FP sha1, FILE_ATTR);
         int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value);
-        int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value, bool);
+        int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value, FILE_ATTR);
         int addRefCnt(const SHA1FP sha1);
         int addRefCnt(const SHA1FP sha1,bool );
         ENTRY_VALUE getEntry(const SHA1FP sha1);
-        std::string genFPname(int version, bool base);
+        std::string genFPname(int version, FILE_ATTR file_attr);
         void loadDeltaDedupFp(std::string fp_name, bool is_restore);
 
         int getBaseContainerMaxValue();
