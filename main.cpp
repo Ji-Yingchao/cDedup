@@ -183,33 +183,31 @@ void writeFile(string path){
     uint32_t current_version = getVersion(Config::getInstance().getFileRecipesPath().c_str(), "recipe");
     // uint32_t max_destination_base = min_destination_base + base_size - 1;
     
-    //bool in_delta = false;
-    FILE_ATTR file_attr;
+    FILE_ATTR file_attr = ATTR_BASE;
     if(dedupMethod == DEDUP_INTERVAL){
         uint32_t base_size = Config::getInstance().getBaseSize();
         uint32_t delta_num = Config::getInstance().getDeltaNum();
         file_attr = (current_version % (base_size + delta_num)) > (base_size-1) ? ATTR_DELTA:ATTR_BASE;
-        //in_delta = (current_version % (base_size + delta_num)) > (base_size-1);
 
         uint32_t min_destination_base = current_version -  current_version % (base_size + delta_num);
         if(current_version == min_destination_base + delta_num)
             GlobalMetadataManagerPtr->clear_base();
     }
-    else if(dedupMethod == DEDUP_AUTOMATIC && current_version != 0){    //版本0,in_delta初始值满足动态要求
+    else if(dedupMethod == DEDUP_AUTOMATIC && current_version != 0){    //版本0,初始值满足动态要求
         uint32_t min_dr = Config::getInstance().getMinDR(); 
         auto [attr, dr] = loadDedupRatioAtLine(current_version-1);
         bool clear_base = dr < (double)min_dr/100 && attr == "delta";
         if(clear_base)
             GlobalMetadataManagerPtr->clear_base();
 
-        //in_delta = !clear_base; //清除base的fp后，下一个必是base
+        //清除base的fp后，下一个必是base
         file_attr = clear_base ? ATTR_BASE : ATTR_DELTA;
     }
     else if(dedupMethod == DEDUP_MANUAL){
         vector<string> attrs = loadDeltaAttrs();
-        // in_delta = attrs.at(current_version) == "delta";
-        file_attr = attrs.at(current_version) == "delta" ? ATTR_DELTA:ATTR_BASE;
+        file_attr = string_to_attr(attrs.at(current_version));
 
+        // TODO: 如果有多个small base，也需要清除之前的sbase，但是base和sbase混用
         if(current_version+1 < attrs.size() && attrs.at(current_version+1) == "base")
             GlobalMetadataManagerPtr->clear_base();
     }
@@ -219,7 +217,7 @@ void writeFile(string path){
         if(dedupMethod == DEDUP_GLOBAL){
             GlobalMetadataManagerPtr->load();
         }
-        else if(file_attr == ATTR_DELTA){
+        else if(file_attr != ATTR_BASE){
             GlobalMetadataManagerPtr->loadVersion(current_version-1,false);
         }
     }

@@ -11,7 +11,6 @@
 using namespace std;
 
 void saveDedupRatio(FILE_ATTR file_attr, double dr) {
-    //string attr = in_delta ? "delta" : "base";
     string attr = attr_to_string(file_attr);
     string dedup_ratio_file = Config::getInstance().getDedupRatioFilePath();
     int fd = open(dedup_ratio_file.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0777);
@@ -93,14 +92,18 @@ vector<pair<string, double>> loadAllDedupRatios() {
     return results;
 }
 
-
-int findNearestBaseBefore(const vector<pair<string, double>>& dr_vec, int current_index) {
-    for (int i = current_index - 1; i >= 0; --i) {
+// 找到上一个small base和 base (-1就是对应的值没找到)
+pair<int, int> findNearestBaseBefore(const vector<pair<string, double>>& dr_vec, int current_index) {
+    int slbase_index = -1; 
+    for (int i = current_index; i >= 0; --i) {   // i = current_index-1
+        if (dr_vec[i].first == "slbase" && slbase_index == -1) {
+            slbase_index = i;  // 只记录第一个遇到的 slbase
+        }
         if (dr_vec[i].first == "base") {
-            return i;  // 找到就返回索引
+            return {slbase_index, i};  // 第一个是 slbase，第二个是 base
         }
     }
-    return -1;  // 没找到
+    return {slbase_index, -1};  // 没有找到 base，只返回 slbase（可能是 -1）
 }
 
 
@@ -164,7 +167,9 @@ std::string attr_to_string(FILE_ATTR attr) {
         case ATTR_BASE: return "base";
         case ATTR_SLBASE: return "slbase";
         case ATTR_DELTA: return "delta";
-        default: throw std::invalid_argument("Unknown FILE_ATTR value");
+        default: 
+            throw std::invalid_argument("Unknown FILE_ATTR value");
+            exit(-1);
     }
 }
 
@@ -174,4 +179,5 @@ FILE_ATTR string_to_attr(const std::string& str) {
     if (str == "slbase") return ATTR_SLBASE;
     if (str == "delta") return ATTR_DELTA;
     throw std::invalid_argument("Unknown FILE_ATTR string");
+    exit(-1);
 }

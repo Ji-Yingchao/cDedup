@@ -35,3 +35,4 @@ sort -n input.txt -o output.txt
 
 ## 清除缓存
 sudo echo 3 > /proc/sys/vm/drop_caches
+rm -rf ~/.vscode-server/data/User/History/*

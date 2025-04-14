@@ -81,22 +81,36 @@ void do_delete(int current_version){
     if(retain_version_number>=0 && current_version >= retain_version_number){
         int delete_version = current_version - Config::getInstance().getRetainVersionNumber();
 
-        // DeltaDedup和普通删除不同
+        // DeltaDedup GC
         if(Config::getInstance().getDedupMethod() != DEDUP_GLOBAL){
             vector<pair<string, double>> dr_vec = loadAllDedupRatios();
-            auto [attr, dr] = dr_vec.at(delete_version);
-            //bool in_delta = (attr == "delta");
+            //auto [attr, dr] = dr_vec.at(delete_version);
+            FILE_ATTR file_attr = string_to_attr(dr_vec.at(delete_version).first);
             
-            if(attr == "delta"){
+            if(file_attr == ATTR_DELTA){
                 deleteFile(delete_version, ATTR_DELTA);
-                //如果连续删除，删掉最后一个delta版本之后，删除该版本对应的base
-                if(delete_version+1 < dr_vec.size() && dr_vec.at(delete_version+1).first == "base"){
-                    //deleteFile(delete_version-1,false);
-                    int last_base_version = findNearestBaseBefore(dr_vec, delete_version);
-                    deleteFile(last_base_version, ATTR_BASE);    //删除对应的base
-                }
             }
+
+            //如果连续删除，删掉最后一个delta或sbase版本之后，删除该版本对应的base
+            if(delete_version+1 < dr_vec.size()){
+                if(dr_vec.at(delete_version+1).first == "slbase"){
+                    auto [last_slbase_version, last_base_version]= findNearestBaseBefore(dr_vec, delete_version);
+                    if(last_slbase_version != -1)
+                        deleteFile(last_slbase_version, ATTR_SLBASE); //删除对应的sbase
+                }
+                else if(dr_vec.at(delete_version+1).first == "base"){
+                    auto [last_slbase_version, last_base_version]= findNearestBaseBefore(dr_vec, delete_version);
+                    if(last_slbase_version != -1)
+                        deleteFile(last_slbase_version, ATTR_SLBASE); 
+                    if(last_base_version != -1)
+                        deleteFile(last_base_version, ATTR_BASE);    //删除对应的base
+                }
+                
+            }
+
+            // 不删除历史记录的attr和hr
         }
+        // Global Index GC
         else{
             //deleteFile(delete_version,true);
         }

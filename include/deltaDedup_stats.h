@@ -20,7 +20,7 @@ FILE_ATTR string_to_attr(const std::string& str);
 void saveDedupRatio(FILE_ATTR file_attr, double dr);
 std::pair<std::string, double> loadDedupRatioAtLine(int target_line);
 std::vector<std::pair<std::string, double>> loadAllDedupRatios();
-int findNearestBaseBefore(const std::vector<std::pair<std::string, double>>& dr_vec,int current_index);
+std::pair<int, int> findNearestBaseBefore(const std::vector<std::pair<std::string, double>>& dr_vec,int current_index);
 
 
 // get attr

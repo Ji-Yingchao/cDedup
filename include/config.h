@@ -79,6 +79,7 @@ class Config{
         int getDeltaNum(){return this->delta_num;}
         int getMinDR(){return this->min_dr;}
         enum DEDUP_METHOD getDedupMethod(){return this->dm;}
+        int getSmlDR(){return this->sml_dr;}
 
         // setters
         void setTask(char* s){this->tt = taskTypeTrans(s);}
@@ -116,6 +117,7 @@ class Config{
         void setDeltaNum(int n){this->delta_num = n;};
         void setMinDR(int n){this->min_dr = n;};
         void setDedupMethod(char* s){this->dm = dedupMethodTrans(s);}
+        void setSmlDR(int n){this->sml_dr = n;};
 
         // you know
         void parse_argument(int argc, char **argv)
@@ -211,6 +213,8 @@ class Config{
                     Config::getInstance().setMinDR(val_int);
                 }else if (strcmp(name, "DedupMethod") == 0) {
                     Config::getInstance().setDedupMethod(valuestring);
+                }else if (strcmp(name, "sml_dr") == 0) {
+                    Config::getInstance().setSmlDR(val_int);
                 }
             }
         }
@@ -245,6 +249,7 @@ class Config{
         int base_size;    // DEDUP_INTERVAL参数
         int delta_num;
         int min_dr;       // DEDUP_AUTOMATIC参数 
+        int sml_dr;
         string dedup_ratio_file_path;   // 写入历史版本的属性和重删率
         string delta_config_file_path;  // DEDUP_MANUAL参数   delta或base的设置文件路径
 

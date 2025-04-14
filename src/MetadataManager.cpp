@@ -27,7 +27,7 @@ int MetadataManager::saveVersion(int current_version, FILE_ATTR file_attr){
             write(fd, (uint8_t*)&item.first, sizeof(SHA1FP));
             write(fd, (uint8_t*)&item.second, sizeof(ENTRY_VALUE));
         }
-    }else if(file_attr == ATTR_DELTA){
+    }else if(file_attr == ATTR_DELTA || file_attr == ATTR_SLBASE){
         for(auto item : this->fp_table_delta){
             write(fd, (uint8_t*)&item.first, sizeof(SHA1FP));
             write(fd, (uint8_t*)&item.second, sizeof(ENTRY_VALUE));
@@ -48,31 +48,40 @@ string MetadataManager::genFPname(int version, FILE_ATTR file_attr){
     fp_name.append(std::to_string(version));
     if(file_attr == ATTR_DELTA)
         fp_name.append("_delta");
-    else
+    else if(file_attr == ATTR_BASE)
         fp_name.append("_base");
+    else if(file_attr == ATTR_SLBASE)
+        fp_name.append("_slbase");
     return fp_name;
 }
 
 
-// DEDEUP_DELTA load fp&entry
+// DEDEUP_DELTA load fp&entry metadata
 int MetadataManager::loadVersion(int version, bool is_restore){
     // 恢复时：如果该版本是base，只需加载base的fp；如果该版本是delta，需要加载它前面一个base的fp和它自己的fp
-    // 写入时：如果该版本是base，不需要加载fp；如果该版本是delta，需要加载它前面一个base的fp
+    // 写入时：因为加载前一个版本所以加载base的fp；如果该版本是delta，需要加载它前面一个base的fp   (如果写入base本身，不需要加载fp)
     vector<pair<string, double>> attr_vec = loadAllDedupRatios();
     auto [attr, dr] = attr_vec.at(version);
-    //bool in_delta = attr == "delta";
     FILE_ATTR file_attr = string_to_attr(attr);
 
     string fp_name = genFPname(version, file_attr);
     if(file_attr == ATTR_BASE){
-        // printf("Length of fp_table_origin: %d\n", this->fp_table_origin.size());
         loadDeltaDedupFp(fp_name,is_restore);
     }else{
-        // 如果是写入加载元数据，不需要加载delta版本的fp
-        int base_file_version = findNearestBaseBefore(attr_vec, version);
-        string base_file = genFPname(base_file_version, ATTR_BASE);
-        loadDeltaDedupFp(base_file,is_restore);
-        if(is_restore){
+        // 写入时加载元数据，不需要加载delta版本的fp
+        // int base_file_version = findNearestBaseBefore(attr_vec, version);
+        // string base_file = genFPname(base_file_version, ATTR_BASE);
+        // loadDeltaDedupFp(base_file,is_restore);
+        auto [last_slbase_version, last_base_version]= findNearestBaseBefore(attr_vec, version);
+        if(last_slbase_version != -1){
+            string slbase_file = genFPname(last_slbase_version, ATTR_SLBASE);
+            loadDeltaDedupFp(slbase_file,is_restore);
+        }
+        if(last_base_version != -1){
+            string base_file = genFPname(last_base_version, ATTR_BASE);
+            loadDeltaDedupFp(base_file,is_restore);
+        }
+        if(is_restore && file_attr == ATTR_DELTA){
             loadDeltaDedupFp(fp_name,is_restore);
         }
     }
@@ -208,7 +217,7 @@ int MetadataManager::addNewEntry(SHA1FP sha1, ENTRY_VALUE value){
 }
 
 int MetadataManager::addNewEntry(SHA1FP sha1, ENTRY_VALUE value, FILE_ATTR file_attr){
-    if(file_attr == ATTR_DELTA)
+    if(file_attr != ATTR_BASE)
         this->fp_table_delta.emplace(sha1, value);
     else    
         this->fp_table_base.emplace(sha1, value);
