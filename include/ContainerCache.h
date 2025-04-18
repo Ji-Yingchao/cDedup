@@ -1,9 +1,9 @@
-#include"MetadataManager.h"
-#include"Cache.h"
-#include<unordered_set>
-#include<unordered_map>
-#include<vector>
-#include<queue>
+#include "MetadataManager.h"
+#include "Cache.h"
+#include <unordered_set>
+#include <unordered_map>
+#include <vector>
+#include <queue>
 
 // #define SECTOR_SIZE (512)
 #define SECTOR_SIZE (4096)
@@ -21,6 +21,10 @@ class ContainerCache : public Cache{
         
         virtual std::string getChunkData(ENTRY_VALUE ev);
 
+        int getReferenceContainerCount();
+
+        void printContainers(int base_container_max_value);
+
     private:
         std::unordered_set<int> container_index_set;
         std::queue<int> container_index_queue;
@@ -31,4 +35,10 @@ class ContainerCache : public Cache{
 
         void loadContainer(int container_number);
         void evictContainerFIFO();
+
+        // 恢复时引用的容器
+        std::vector<int> reference_containers;
+
+        void removeDuplicates();
+        std::pair<size_t, size_t> countBaseAndDelta(uint64_t threshold);
 };

@@ -69,9 +69,6 @@ int MetadataManager::loadVersion(int version, bool is_restore){
         loadDeltaDedupFp(fp_name,is_restore);
     }else{
         // 写入时加载元数据，不需要加载delta版本的fp
-        // int base_file_version = findNearestBaseBefore(attr_vec, version);
-        // string base_file = genFPname(base_file_version, ATTR_BASE);
-        // loadDeltaDedupFp(base_file,is_restore);
         auto [last_slbase_version, last_base_version]= findNearestBaseBefore(attr_vec, version);
         if(last_slbase_version != -1){
             string slbase_file = genFPname(last_slbase_version, ATTR_SLBASE);

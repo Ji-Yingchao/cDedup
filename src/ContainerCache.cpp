@@ -5,7 +5,6 @@
 
 std::string ContainerCache::getChunkData(ENTRY_VALUE ev){
     auto numberIter = this->container_index_set.find(ev.container_number);
-    //只数容器数量，所以注释
     if(numberIter != this->container_index_set.end()){
         //cache hit
         return std::string(cache[ev.container_number], ev.offset, ev.chunk_length);
@@ -17,6 +16,7 @@ std::string ContainerCache::getChunkData(ENTRY_VALUE ev){
         this->loadContainer(ev.container_number);
         return std::string(cache[ev.container_number], ev.offset, ev.chunk_length);
     }
+    // 只数容器数量，不返回数据
     // if(numberIter != this->container_index_set.end()){
     //     //cache hit
     //     return std::string("aaa");
@@ -53,7 +53,7 @@ void ContainerCache::loadContainer(int container_index){
     this->cache[container_index] = content;
 
     // 数容器数量
-    this->addReferenceContainer(container_index);
+    this->reference_containers.push_back(container_index);
 
     close(fd);
 }
@@ -64,4 +64,43 @@ void ContainerCache::evictContainerFIFO(){
     this->container_index_queue.pop();
 
     cache.erase(container_index);
+}
+
+
+// 统计恢复时的容器数量
+int ContainerCache::getReferenceContainerCount(){
+    return this->reference_containers.size();
+};
+
+// 去除重复的容器
+void ContainerCache::removeDuplicates() {
+    std::unordered_set<int> unique_elements(this->reference_containers.begin(), this->reference_containers.end());
+    this->reference_containers.assign(unique_elements.begin(), unique_elements.end());
+}
+
+// 统计base容器和delta容器的个数
+std::pair<size_t, size_t> ContainerCache::countBaseAndDelta(uint64_t threshold) {
+    // 小于或等于 threshold 的容器是base
+    size_t count_base = std::count_if(this->reference_containers.begin(), this->reference_containers.end(),
+                                    [threshold](uint64_t value) { return value <= threshold; });
+    size_t count_delta = std::count_if(this->reference_containers.begin(), this->reference_containers.end(),
+                                        [threshold](uint64_t value) { return value > threshold; });
+    return {count_base, count_delta};
+}
+
+void ContainerCache::printContainers(int base_container_max_value){
+    // 读取容器的次数
+    int container_read_count = this->getReferenceContainerCount();
+    auto [base_counter, delta_container] = this->countBaseAndDelta(base_container_max_value);
+    printf("Read Container Count: %d\n", container_read_count);
+    printf("Read Base Container Count: %d\n", base_counter);
+    printf("Read Delta Container Count: %d\n", delta_container);
+
+    // 去重后是引用容器的个数
+    this->removeDuplicates();
+    int reference_containers_count = this->getReferenceContainerCount(); 
+    auto [r_base_counter, r_delta_container] = this->countBaseAndDelta(base_container_max_value);
+    printf("Reference Container Count: %d\n", reference_containers_count);
+    printf("Reference Base Container Count: %d\n", r_base_counter);
+    printf("Reference Delta Container Count: %d\n", r_delta_container);
 }

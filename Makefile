@@ -1,7 +1,7 @@
 CC = gcc
 LIB = -lcrypto -lz -lstdc++ -llz4 -lpthread -lstdc++fs
 SRC = main.cpp ./src/fastcdc.cpp ./src/full_file_deduplicater.cpp ./src/merkle_tree.cpp \
-	  ./src/MetadataManager.cpp ./src/ContainerCache.cpp ./src/ChunkCache.cpp\
+	  ./src/MetadataManager.cpp ./src/ContainerCache.cpp ./src/ChunkCache.cpp ./src/IndependentCache.cpp\
 	  ./src/deltaDedup_stats.cpp ./src/recipe.cpp ./src/backup_job.cpp\
 	  ./src/deltaDedup_gc.cpp\
 	  ./src/compressor.cpp \

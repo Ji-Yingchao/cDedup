@@ -15,6 +15,8 @@ stdbuf -oL ./cDedup conf/writeExample.json | grep -oP 'Dedup Ratio \K[\d.]+'
 ./cDedup conf/readExample.json
 ./batchread.sh > results.txt
 
+independent container
+
 ## 数据集
 folder_path="/home/cyf/ssd0/SFD_TAR/"
 folder_path="/home/jyc/ssd/dataset/CHM/"

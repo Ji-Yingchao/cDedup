@@ -22,6 +22,7 @@
 #include "MetadataManager.h"
 #include "ContainerCache.h"
 #include "ChunkCache.h"
+#include "IndependentCache.h"
 #include "general.h"
 #include "FAA.h"
 #include "config.h"
@@ -314,6 +315,14 @@ void writeFile(string path){
     double cur_dr = double(dedup_size) / double(sum_size);
     //printf("dedup ratio %.2f% \n",     double(dedup_size) / double(sum_size) *100);
     printf("Dedup Ratio %.2f \n",     double(sum_size) / double(sum_size-dedup_size) );
+
+
+    // delta -> small base
+    if(dedupMethod == DEDUP_AUTOMATIC && file_attr == ATTR_DELTA){   
+        uint32_t sml_dr = Config::getInstance().getSmlDR(); 
+        if(sml_dr != 0 && cur_dr < (double)sml_dr/100)
+            file_attr = ATTR_SLBASE;
+    }
     
     // save dedup ratio
     if(dedupMethod != DEDUP_GLOBAL){
@@ -402,7 +411,7 @@ int main(int argc, char** argv){
         float throughput = (float)(bj.sum_size) / MB / ((float)(single_dedup_time_us)/1000000);
 
         // 写文件 - 重删统计
-        print_backup_job(bj);
+        //print_backup_job(bj);
         printf("-----------------------statics----------------------\n");
         printf("Throughput %.2f MiB/s\n",    throughput);
         //printf("Dedup Ratio %.2f%\n",     double(bj.dedup_size) / double(bj.sum_size) *100);
@@ -435,15 +444,14 @@ int main(int argc, char** argv){
         memset(assembling_buffer, 0, FILE_CACHE);
         int write_buffer_offset = 0;
         uint64_t restored_size = 0;
-        uint64_t container_read_count = 0;
-        uint64_t reference_containers_count = 0;
+        int container_read_count = 0;
 
         //recipe
         std::vector<std::string> file_recipe = getFileRecipe(restore_version, recipe_path.c_str());
 
         //组装
         RESTORE_METHOD rm = Config::getInstance().getRestoreMethod();
-        if(rm == CONTAINER_CACHE || rm == CHUNK_CACHE){
+        if(rm == CONTAINER_CACHE || rm == CHUNK_CACHE || rm == INDENPENDENT_CACHE){
             // int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT| O_DIRECT, 0777);
             int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT, 0777);
             if(fd < 0){
@@ -458,7 +466,9 @@ int main(int argc, char** argv){
                 cc = new ContainerCache(Config::getInstance().getContainersPath().c_str(), Config::getInstance().getCacheSize());
             }else if(rm == CHUNK_CACHE){
                 cc = new ChunkCache(Config::getInstance().getContainersPath().c_str(), 16*1024);
-            }  
+            }else if(rm == INDENPENDENT_CACHE){
+                cc = new IndependentCache(Config::getInstance().getContainersPath().c_str(), Config::getInstance().getCacheSize(), base_container_max_value);
+            } 
             
 
             SHA1FP fp;
@@ -488,17 +498,14 @@ int main(int argc, char** argv){
             close(fd);
 
             // 统计读容器数量和引用容器数量
-            container_read_count = cc->getReferenceContainerCount();
-            // auto [base_counter, delta_container] = cc->countBaseAndDelta(base_container_max_value);
-            // printf("Read Container Count: %ld\n", container_read_count);
-            // printf("Read Base Container Count: %d\n", base_counter);
-            // printf("Read Delta Container Count: %d\n", delta_container);
-            // cc->removeDuplicates();
-            // reference_containers_count = cc->getReferenceContainerCount(); 
-            // auto [r_base_counter, r_delta_container] = cc->countBaseAndDelta(base_container_max_value);
-            // printf("Reference Container Count: %ld\n", reference_containers_count);
-            // printf("Reference Base Container Count: %d\n", r_base_counter);
-            // printf("Reference Delta Container Count: %d\n", r_delta_container);
+            if(rm == CONTAINER_CACHE){
+                container_read_count = ((ContainerCache*)cc)->getReferenceContainerCount();
+               ((ContainerCache*)cc)->printContainers(base_container_max_value);
+            }else if(rm == INDENPENDENT_CACHE){
+                container_read_count = ((IndependentCache*)cc)->getReferenceContainerCount();
+               ((IndependentCache*)cc)->printContainers(base_container_max_value);
+            }
+            
 
         }else if(Config::getInstance().getRestoreMethod() == FAA_FIXED){
             int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT, 0777);
