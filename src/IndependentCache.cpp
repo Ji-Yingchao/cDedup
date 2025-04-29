@@ -96,14 +96,14 @@ void IndependentCache::printContainers(int base_container_max_value){
     // 读取容器的次数
     int container_read_count = this->getReferenceContainerCount();
     printf("Read Container Count: %d\n", container_read_count);
-    printf("Read Base Container Count: %d\n", this->read_base_containers.size());
-    printf("Read Delta Container Count: %d\n", this->read_delta_containers.size());
+    printf("Read Base Container Count: %ld\n", this->read_base_containers.size());
+    printf("Read Delta Container Count: %ld\n", this->read_delta_containers.size());
 
     // 去重后是引用容器的个数
     this->removeDuplicates(this->read_base_containers);
     this->removeDuplicates(this->read_delta_containers);
     int reference_containers_count = this->getReferenceContainerCount(); 
     printf("Reference Container Count: %d\n", reference_containers_count);
-    printf("Reference Base Container Count: %d\n", this->read_base_containers.size());
-    printf("Reference Delta Container Count: %d\n", this->read_delta_containers.size());
+    printf("Reference Base Container Count: %ld\n", this->read_base_containers.size());
+    printf("Reference Delta Container Count: %ld\n", this->read_delta_containers.size());
 }

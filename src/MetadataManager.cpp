@@ -8,6 +8,7 @@
 #include <string.h>
 #include <algorithm>
 #include <regex>
+#include <unordered_set>
 
 
 MetadataManager *GlobalMetadataManagerPtr;
@@ -125,6 +126,7 @@ void MetadataManager::loadDeltaDedupFp(std::string fp_name, bool is_restore){
     printf("metadata table load %d items\n", entry_count);
 }
 
+
 int MetadataManager::load(){
     printf("-----------------------Loading FP-index-----------------------\n");
     printf("Loading index..\n");
@@ -222,32 +224,41 @@ int MetadataManager::addNewEntry(SHA1FP sha1, ENTRY_VALUE value, FILE_ATTR file_
 }
 
 // delta版本的重复块可以来自delta和base，base只来自base
-int MetadataManager::addRefCnt(const SHA1FP sha1, bool in_delta){
-    if(in_delta){
+int MetadataManager::addRefCntgetContainer(const SHA1FP sha1, FILE_ATTR file_attr){
+    if(file_attr != ATTR_BASE){
         auto dedupIter = this->fp_table_delta.find(sha1);
         if(dedupIter != this->fp_table_delta.end()){
-            return ++dedupIter->second.ref_cnt;
+            ++dedupIter->second.ref_cnt;
+            // 返回容器索引
+            return dedupIter->second.container_number;
         } 
     }
     auto dedupIter = this->fp_table_base.find(sha1);
     if(dedupIter != this->fp_table_base.end()){
-        return ++dedupIter->second.ref_cnt;
+        ++dedupIter->second.ref_cnt;
+        return dedupIter->second.container_number;
     }
     printf("addRefCnt: did not find\n");
 }
 
 int MetadataManager::addRefCnt(const SHA1FP sha1){
     auto dedupIter = this->fp_table_added.find(sha1);
-    if(dedupIter != this->fp_table_added.end())
+    if(dedupIter != this->fp_table_added.end()){
         return ++dedupIter->second.ref_cnt;
+    }      
     dedupIter = this->fp_table_origin.find(sha1);
-    if(dedupIter != this->fp_table_origin.end())
+    if(dedupIter != this->fp_table_origin.end()){
         return ++dedupIter->second.ref_cnt;
+    }
     printf("addRefCnt: did not find\n");
 }
 
 ENTRY_VALUE MetadataManager::getEntry(const SHA1FP sha1){
     return this->fp_table_origin[sha1];
+}
+
+ENTRY_VALUE& MetadataManager::getEntry(const SHA1FP sha1, FILE_ATTR file_attr){
+    return this->fp_table_base[sha1];
 }
 
 int MetadataManager::getBaseContainerMaxValue(){
@@ -257,6 +268,22 @@ int MetadataManager::getBaseContainerMaxValue(){
 void MetadataManager::clear_base(){
     fp_table_base.clear(); 
 }
+
+void MetadataManager::printOriginTable(){
+    unordered_map<CONTAINER_TYPE, unordered_set<int>> reference_containers;
+    int hot = 0, cold = 0, common = 0;
+    for(auto& x :this->fp_table_origin){
+        reference_containers[x.second.container_type].insert(x.second.container_number);
+    }
+    printf("hot container:  %d \n", reference_containers[HOT_CONTAINER].size());
+    printf("cold container:  %d \n", reference_containers[COLD_CONTAINER].size());
+    printf("container:  %d \n", reference_containers[CONTAINER].size());
+}
+
+void printFPRefCnt(){
+
+}
+
 
 // int MetadataManager::save(int current_version, int delta_size, int base_pos){
 //     //printf("-----------------------Saving One File FP-index-----------------------\n");
@@ -302,4 +329,30 @@ void MetadataManager::clear_base(){
 //     //printf("total item %d\n", count);
 //     close(fd);
 //     return 0;
+// }
+
+
+// // delta版本的重复块可以来自delta和base，base只来自base
+// int MetadataManager::addRefCnt(const SHA1FP sha1, FILE_ATTR file_attr){
+//     if(file_attr != ATTR_BASE){
+//         auto dedupIter = this->fp_table_delta.find(sha1);
+//         if(dedupIter != this->fp_table_delta.end()){
+//             return ++dedupIter->second.ref_cnt;
+//         } 
+//     }
+//     auto dedupIter = this->fp_table_base.find(sha1);
+//     if(dedupIter != this->fp_table_base.end()){
+//         return ++dedupIter->second.ref_cnt;
+//     }
+//     printf("addRefCnt: did not find\n");
+// }
+
+// int MetadataManager::addRefCnt(const SHA1FP sha1){
+//     auto dedupIter = this->fp_table_added.find(sha1);
+//     if(dedupIter != this->fp_table_added.end())
+//         return ++dedupIter->second.ref_cnt;
+//     dedupIter = this->fp_table_origin.find(sha1);
+//     if(dedupIter != this->fp_table_origin.end())
+//         return ++dedupIter->second.ref_cnt;
+//     printf("addRefCnt: did not find\n");
 // }

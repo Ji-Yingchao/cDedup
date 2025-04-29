@@ -8,7 +8,6 @@
 #include <cerrno>
 #include <iostream>
 
-using namespace std;
 
 void saveDedupRatio(FILE_ATTR file_attr, double dr) {
     string attr = attr_to_string(file_attr);
@@ -107,6 +106,109 @@ pair<int, int> findNearestBaseBefore(const vector<pair<string, double>>& dr_vec,
 }
 
 
+vector<string> loadDeltaAttrs(){
+    string deltaConfigFilePath = Config::getInstance().getDeltaConfigFilePath();
+    ifstream infile(deltaConfigFilePath);  
+    vector<string> attrs;
+    string line,attr;
+
+    if (!infile) {
+        cerr << "loadDeltaAttrs open error" << endl;
+        exit(-1);
+    }
+
+    while (getline(infile, line)) {
+        stringstream ss(line);
+        ss >> attr;
+        attrs.push_back(attr);  
+    }
+
+    infile.close();
+    return attrs;
+}
+
+
+// 枚举值转字符串
+string attr_to_string(FILE_ATTR attr) {
+    switch (attr) {
+        case ATTR_BASE: return "base";
+        case ATTR_SLBASE: return "slbase";
+        case ATTR_DELTA: return "delta";
+        default: 
+            throw invalid_argument("Unknown FILE_ATTR value");
+            exit(-1);
+    }
+}
+
+// 字符串转枚举值
+FILE_ATTR string_to_attr(const string& str) {
+    if (str == "base") return ATTR_BASE;
+    if (str == "slbase") return ATTR_SLBASE;
+    if (str == "delta") return ATTR_DELTA;
+    throw invalid_argument("Unknown FILE_ATTR string");
+    exit(-1);
+}
+
+string container_type_to_string(CONTAINER_TYPE type){
+    switch (type) {
+        case HOT_CONTAINER: return "hot_container";
+        case COLD_CONTAINER: return "cold_container";
+        case CONTAINER:      return "container";
+        default:    
+            throw invalid_argument("Unknown CONTAINER_TYPE value");
+            exit(-1);
+    }
+}
+
+CONTAINER_TYPE string_to_container_type(const string& str){
+    if (str == "hot_container") return HOT_CONTAINER;
+    if (str == "cold_container") return COLD_CONTAINER;
+    if (str == "container") return CONTAINER;
+    throw invalid_argument("Unknown CONTAINER_TYPE string");
+    exit(-1);
+}
+
+
+void saveContainerIds(vector<int> refContainers, int current_version){
+    string container_index_path = Config::getInstance().getContainerIndexPath();
+    string container_index_name(container_index_path);
+    container_index_name.append("/container");
+    container_index_name.append(to_string(current_version));
+
+    ofstream outFile(container_index_name);
+    if (!outFile) {
+        cerr << "Unable to open file: " << container_index_name << "\n";
+        return;
+    }
+    for (int value : refContainers) {
+        outFile << value << "\n";
+    }
+
+    outFile.close();
+}
+
+vector<int> loadContainerIds(int current_version) {
+    vector<int> refContainers;
+
+    string container_index_path = Config::getInstance().getContainerIndexPath();
+    string container_index_name = container_index_path + "/container" + to_string(current_version);
+
+    ifstream inFile(container_index_name);
+    if (!inFile) {
+        cerr << "Unable to open file: " << container_index_name << "\n";
+        return refContainers; // 返回空 vector
+    }
+
+    int value;
+    while (inFile >> value) {
+        refContainers.push_back(value);
+    }
+
+    inFile.close();
+    return refContainers;
+}
+
+
 // string getDeltaAttr(int target_line){
 //     string deltaConfigFilePath = Config::getInstance().getDeltaConfigFilePath();
 //     ifstream infile(deltaConfigFilePath);  
@@ -121,7 +223,7 @@ pair<int, int> findNearestBaseBefore(const vector<pair<string, double>>& dr_vec,
 //     while (getline(infile, line)) {
 //         if(!line.empty()){
 //             if (current_line == target_line){
-//                 std::stringstream ss(line);
+//                 stringstream ss(line);
 //                 ss >> attr;
 //                 if (ss.fail()) {
 //                     cerr << "Failed to parse deltaAttr line " << target_line << ": " << line << endl;
@@ -138,46 +240,3 @@ pair<int, int> findNearestBaseBefore(const vector<pair<string, double>>& dr_vec,
 //     cerr << "Line " << target_line << " not found in deltaAttr file." << endl;
 //     exit(-1);
 // }
-
-vector<string> loadDeltaAttrs(){
-    string deltaConfigFilePath = Config::getInstance().getDeltaConfigFilePath();
-    ifstream infile(deltaConfigFilePath);  
-    vector<string> attrs;
-    string line,attr;
-
-    if (!infile) {
-        cerr << "loadDeltaAttrs open error" << endl;
-        exit(-1);
-    }
-
-    while (getline(infile, line)) {
-        std::stringstream ss(line);
-        ss >> attr;
-        attrs.push_back(attr);  
-    }
-
-    infile.close();
-    return attrs;
-}
-
-
-// 枚举值转字符串
-std::string attr_to_string(FILE_ATTR attr) {
-    switch (attr) {
-        case ATTR_BASE: return "base";
-        case ATTR_SLBASE: return "slbase";
-        case ATTR_DELTA: return "delta";
-        default: 
-            throw std::invalid_argument("Unknown FILE_ATTR value");
-            exit(-1);
-    }
-}
-
-// 字符串转枚举值
-FILE_ATTR string_to_attr(const std::string& str) {
-    if (str == "base") return ATTR_BASE;
-    if (str == "slbase") return ATTR_SLBASE;
-    if (str == "delta") return ATTR_DELTA;
-    throw std::invalid_argument("Unknown FILE_ATTR string");
-    exit(-1);
-}

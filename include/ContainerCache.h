@@ -1,5 +1,7 @@
 #include "MetadataManager.h"
 #include "Cache.h"
+#include "config.h"
+#include "deltaDedup_stats.h"
 #include <unordered_set>
 #include <unordered_map>
 #include <vector>
@@ -13,32 +15,37 @@ class ContainerCache : public Cache{
             this->containers_path = containersPath;
             this->cache_max_size = cache_max_size; // 单位：容器数量
             posix_memalign((void**)&this->container_buf, SECTOR_SIZE, CONTAINER_SIZE);
+
+            this->hot_containers_path = Config::getInstance().getHotContainersPath();
         }
 
         ~ContainerCache(){
             free(this->container_buf);
         }
         
-        virtual std::string getChunkData(ENTRY_VALUE ev);
+        virtual string getChunkData(ENTRY_VALUE ev);
 
         int getReferenceContainerCount();
 
         void printContainers(int base_container_max_value);
 
     private:
-        std::unordered_set<int> container_index_set;
-        std::queue<int> container_index_queue;
-        std::string containers_path;
+        unordered_set<ContainerKey, ContainerKeyHash> container_index_set;
+        queue<ContainerKey> container_index_queue;
+        string containers_path;
         int cache_max_size;
-        std::unordered_map<int, std::string> cache;
+        //unordered_map<int, string> cache;
+        unordered_map<ContainerKey, string, ContainerKeyHash> cache;
         char* container_buf;
 
-        void loadContainer(int container_number);
+        string hot_containers_path;
+
+        void loadContainer(int container_number, CONTAINER_TYPE container_type);
         void evictContainerFIFO();
 
         // 恢复时引用的容器
-        std::vector<int> reference_containers;
+        unordered_map<CONTAINER_TYPE, vector<int>> reference_containers;  
 
         void removeDuplicates();
-        std::pair<size_t, size_t> countBaseAndDelta(uint64_t threshold);
+        pair<int, int> countBaseAndDelta(uint64_t threshold);
 };

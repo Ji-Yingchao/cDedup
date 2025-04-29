@@ -1,6 +1,6 @@
 {
   "Task": "write",
-  "InputFile": "/home/jyc/ssd/dataset/LLVM/llvmorg-14.0.1.tar",
+  "InputFile": "/home/jyc/ssd/dataset/LLVM/llvmorg-12.0.0-rc1.tar",
   "ChunkingMethod": "cdc",
   "Size": 4096,
   "Normal": 2,
@@ -11,10 +11,13 @@
   "fingerprintsDeltaDedupFolder": "/home/jyc/hdd/deltaworking/metadata/fingerprintsDeltaDedup",
   "dedupRatioFilePath": "/home/jyc/hdd/deltaworking/metadata/deltaHistoryDR.txt",
   "deltaConfigFilePath": "/home/jyc/hdd/deltaworking/deltaConfig.txt",
+  "containerIndexPath": "/home/jyc/hdd/deltaworking/metadata/containerIndex",
+  "hotContainersPath": "/home/jyc/hdd/deltaworking/HotContainers",
+  "arranged": "no",
   "DedupMethod": "interval",
   "RetainVersionNumber": -1,
   "base_size": 1,
-  "delta_num": 9,
+  "delta_num": 14,
   "min_dr": 0,
   "sml_dr": 50
 }

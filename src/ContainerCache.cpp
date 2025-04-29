@@ -1,45 +1,41 @@
-#include"ContainerCache.h"
+#include "ContainerCache.h"
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
 
-std::string ContainerCache::getChunkData(ENTRY_VALUE ev){
-    auto numberIter = this->container_index_set.find(ev.container_number);
+string ContainerCache::getChunkData(ENTRY_VALUE ev){
+    ContainerKey key = {ev.container_type, ev.container_number};
+    auto numberIter = this->container_index_set.find(key);
     if(numberIter != this->container_index_set.end()){
         //cache hit
-        return std::string(cache[ev.container_number], ev.offset, ev.chunk_length);
+        return string(cache[key], ev.offset, ev.chunk_length);
     }else{
         //cache miss
         if(container_index_queue.size() >= this->cache_max_size){
             evictContainerFIFO();
         }
-        this->loadContainer(ev.container_number);
-        return std::string(cache[ev.container_number], ev.offset, ev.chunk_length);
+        this->loadContainer(ev.container_number, ev.container_type);
+        return string(cache[key], ev.offset, ev.chunk_length);
     }
-    // 只数容器数量，不返回数据
-    // if(numberIter != this->container_index_set.end()){
-    //     //cache hit
-    //     return std::string("aaa");
-    // }else{
-    //     //cache miss
-    //     if(container_index_queue.size() >= this->cache_max_size){
-    //         evictContainerFIFO();
-    //     }
-    //     this->loadContainer(ev.container_number);
-    //     return std::string("bbb");
-    // }
 }
 
-void ContainerCache::loadContainer(int container_index){
+void ContainerCache::loadContainer(int container_index, CONTAINER_TYPE container_type){
     //struct timeval start1, end1,start2, end2;
-    this->container_index_queue.push(container_index);
-    this->container_index_set.insert(container_index);
+    ContainerKey key = {container_type, container_index};
+    this->container_index_queue.push(key);
+    this->container_index_set.insert(key);
     
     //只数容器数量，所以注释
-    std::string container_name(this->containers_path);
-    container_name.append("/container");
-    container_name.append(std::to_string(container_index));
+    string container_path;
+    if(container_type == HOT_CONTAINER) container_path = this->hot_containers_path;
+    else container_path = this->containers_path;
+    string container_name = container_path + "/" + container_type_to_string(container_type) + to_string(container_index);
+
     int fd = open(container_name.data(), O_RDONLY | O_DIRECT);
+    if (fd == -1) {
+        printf("open container error: %s\n", strerror(errno));
+        exit(-1);
+    }
 
     memset(this->container_buf, 0, CONTAINER_SIZE);
     //gettimeofday(&start2, NULL);
@@ -48,18 +44,18 @@ void ContainerCache::loadContainer(int container_index){
     //int tmp = (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
     //this->total_time2 += (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
 
-    std::string content(this->container_buf , n);
+    string content(this->container_buf , n);
 
-    this->cache[container_index] = content;
+    this->cache[key] = content;
 
     // 数容器数量
-    this->reference_containers.push_back(container_index);
+    this->reference_containers[container_type].push_back(container_index);
 
     close(fd);
 }
 
 void ContainerCache::evictContainerFIFO(){
-    int container_index = this->container_index_queue.front();
+    ContainerKey container_index = this->container_index_queue.front();
     this->container_index_set.erase(container_index);
     this->container_index_queue.pop();
 
@@ -69,24 +65,49 @@ void ContainerCache::evictContainerFIFO(){
 
 // 统计恢复时的容器数量
 int ContainerCache::getReferenceContainerCount(){
-    return this->reference_containers.size();
+    int total_count = 0;
+    for (const auto& [type, ids] : this->reference_containers) {
+        total_count += ids.size();
+        //printf("%s: %d\n", container_type_to_string(type).c_str(),ids.size());
+    }
+    return total_count;
 };
 
 // 去除重复的容器
 void ContainerCache::removeDuplicates() {
-    std::unordered_set<int> unique_elements(this->reference_containers.begin(), this->reference_containers.end());
-    this->reference_containers.assign(unique_elements.begin(), unique_elements.end());
+    for (auto& [type, ids] : this->reference_containers) {
+        unordered_set<int> seen;
+        vector<int> unique_ids;
+
+        for (int id : ids) {
+            if (seen.insert(id).second) {
+                unique_ids.push_back(id);  
+            }
+        }
+        ids = move(unique_ids); 
+    }
 }
 
 // 统计base容器和delta容器的个数
-std::pair<size_t, size_t> ContainerCache::countBaseAndDelta(uint64_t threshold) {
+pair<int, int> ContainerCache::countBaseAndDelta(uint64_t threshold) {
     // 小于或等于 threshold 的容器是base
-    size_t count_base = std::count_if(this->reference_containers.begin(), this->reference_containers.end(),
+    int count_base = 0, count_delta = 0;
+    if (this->reference_containers.find(CONTAINER) != reference_containers.end()){
+        count_base = count_if(this->reference_containers[CONTAINER].begin(), this->reference_containers[CONTAINER].end(),
                                     [threshold](uint64_t value) { return value <= threshold; });
-    size_t count_delta = std::count_if(this->reference_containers.begin(), this->reference_containers.end(),
+        count_delta = count_if(this->reference_containers[CONTAINER].begin(), this->reference_containers[CONTAINER].end(),
                                         [threshold](uint64_t value) { return value > threshold; });
+    }
+    if (this->reference_containers.find(HOT_CONTAINER) != reference_containers.end()){
+        count_base += this->reference_containers[HOT_CONTAINER].size();
+    }
+    if (this->reference_containers.find(COLD_CONTAINER) != reference_containers.end()){
+        count_base += this->reference_containers[COLD_CONTAINER].size();
+    }
+    
     return {count_base, count_delta};
 }
+
 
 void ContainerCache::printContainers(int base_container_max_value){
     // 读取容器的次数

@@ -21,11 +21,11 @@ void deleteFile(int delete_version,FILE_ATTR file_attr){
         printf("Version %d not exist!\n", delete_version);
         exit(-1);
     }
+    
     printf("-------------Begin to delete file version %d-----------\n",delete_version);
     struct timeval delete_time_start, delete_time_end;  
     gettimeofday(&delete_time_start, NULL);
 
-    
     std::vector<std::string> file_recipe = getFileRecipe(delete_version,
                                                         Config::getInstance().getFileRecipesPath().c_str());
     uint64_t file_size = 0;

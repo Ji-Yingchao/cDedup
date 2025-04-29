@@ -17,8 +17,6 @@
 #include <algorithm>
 
 #include "fastcdc.h"
-#include "full_file_deduplicater.h"
-#include "merkle_tree.h"
 #include "MetadataManager.h"
 #include "ContainerCache.h"
 #include "ChunkCache.h"
@@ -29,15 +27,15 @@
 #include "recipe.h"
 #include "deltaDedup_stats.h"
 #include "deltaDedup_gc.h"
+#include "OutputContainer.h"
 #include "backup_job.h"
 #include "utils/metadata.h"
 #include "utils/cJSON.h"
-#include "compressor.h"
 #include "global_stat.h"
 #include "jcr.h"
 #include "pipeline.h"
 
-namespace fs = std::experimental::filesystem;
+namespace fs = experimental::filesystem;
 
 uint32_t rev_container_cnt = 0;
 unsigned char rev_container_buf[CONTAINER_SIZE]={0};
@@ -47,49 +45,59 @@ char* global_stat_path = "/home/jyc/cDedup/global_stat.json";
 extern MetadataManager *GlobalMetadataManagerPtr;
 int (*chunking) (unsigned char*p, int n);
 
-
-void saveContainer(int container_index, unsigned char* container_buf, unsigned int len, const char* containersPath){
-    std::string container_name(containersPath);
-    container_name.append("/container");
-    container_name.append(std::to_string(container_index));
-    int fd = open(container_name.data(), O_RDWR | O_CREAT, 0777);
-    if(write(fd, container_buf, CONTAINER_SIZE) != CONTAINER_SIZE){
-        printf("saveContainer write error, id %d, %s\n", errno, strerror(errno));
-        exit(-1);
-    }
-    close(fd);
-}
-
-void saveChunkToContainer(unsigned int& container_buf_pointer, unsigned char* container_buf, 
-                          uint32_t& container_index, uint32_t& container_inner_offset, uint16_t& container_inner_index,
-                          int chunk_length, int file_offset, unsigned char* file_cache, void* SHA_buf,
-                          const char* containers_path){
-    // flush
-    if(container_buf_pointer + chunk_length >= CONTAINER_SIZE){
-        saveContainer(container_index, container_buf, container_buf_pointer, containers_path);
-        memset(container_buf, 0, CONTAINER_SIZE);
-        container_index++;
-        container_inner_offset = 0;
-        container_buf_pointer = 0;
-        container_inner_index = 0;
-
-        rev_container_cnt = 0;
-    }
-
-    // container buffer
-    memcpy(container_buf + container_buf_pointer, file_cache + file_offset, chunk_length);
-    memcpy(rev_container_buf + sizeof(SHA1FP)*rev_container_cnt, SHA_buf, sizeof(SHA1FP));
-
-}
-
 void flushAssemblingBuffer(int fd, unsigned char* buf, int len){
     if(write(fd, buf, len) != len){
         printf("Restore, write file error!!!\n");
-        std::cerr << "write failed: " << strerror(errno) << std::endl;
+        cerr << "write failed: " << strerror(errno) << endl;
         exit(-1);
     }
     // fsync(fd);
     //close(fd);
+}
+
+void do_arrange(int current_version){
+    if(!Config::getInstance().getArranged() || current_version < 2) return ;
+    
+    vector<pair<string, double>> dr_vec = loadAllDedupRatios();
+    int arrange_version = current_version-2;
+    FILE_ATTR file_attr = string_to_attr(dr_vec.at(arrange_version).first);
+    
+    if(file_attr != ATTR_BASE) return ;
+    printf("-------------Begin to arrange file version %d-----------\n",arrange_version);
+
+    unordered_set<int> usedContainers;
+    vector<string> file_recipe = getFileRecipe(arrange_version, Config::getInstance().getFileRecipesPath().c_str());
+    ContainerCache* cc = new ContainerCache(Config::getInstance().getContainersPath().c_str(), 64);
+    OutputContainer hotContainer(Config::getInstance().getHotContainersPath().c_str(), HOT_CONTAINER, arrange_version);
+    OutputContainer coldContainer(Config::getInstance().getContainersPath().c_str(), COLD_CONTAINER, arrange_version);
+
+    SHA1FP fp;
+    for(auto& x : file_recipe){
+        memcpy(&fp, x.data(), sizeof(SHA1FP));
+        ENTRY_VALUE& entry = GlobalMetadataManagerPtr->getEntry(fp, ATTR_BASE);
+        usedContainers.insert(entry.container_number);
+
+        if (entry.container_type == CONTAINER){
+            // write to new container and update metadata
+            string ck_data = cc->getChunkData(entry);
+            if(entry.ref_cnt >= 2)
+                hotContainer.writeChunk(ck_data, entry);
+            else 
+                coldContainer.writeChunk(ck_data,entry);
+        }
+    }
+
+    //save metadata
+    GlobalMetadataManagerPtr->saveVersion(arrange_version, file_attr);
+
+    // delete used container
+    for (const auto& cid : usedContainers) {
+        string path = Config::getInstance().getContainersPath() + "/container" + to_string(cid);
+        if (remove(path.c_str()) != 0) {
+            cerr << "Failed to delete container: " << path << endl;
+        }
+    }
+    
 }
 
 
@@ -124,9 +132,9 @@ void initChunkingAlgorithm(){
 }
 
 
-std::vector<fs::path> traverseDirectory(const fs::path& directory) {
+vector<fs::path> traverseDirectory(const fs::path& directory) {
     try {
-        std::vector<fs::path> files;
+        vector<fs::path> files;
 
         // 遍历目录
         for (const auto& entry : fs::directory_iterator(directory)) {
@@ -138,8 +146,8 @@ std::vector<fs::path> traverseDirectory(const fs::path& directory) {
         }
 
         return files;
-    } catch (const std::exception& ex) {
-        std::cerr << "Error: " << ex.what() << std::endl;
+    } catch (const exception& ex) {
+        cerr << "Error: " << ex.what() << endl;
     }
 }
 
@@ -157,19 +165,13 @@ void writeFile(string path){
 
     unsigned char* file_cache = (unsigned char*)malloc(FILE_CACHE);
     struct SHA1FP sha1_fp;
-    std::vector<std::string> file_recipe; // 保存这个文件所有块的指纹
+    vector<string> file_recipe; // 保存这个文件所有块的指纹
+    vector<int> refContainers;
 
     // metadata entry(except FP)
-    uint32_t container_index = getVersion(Config::getInstance().getContainersPath().c_str(),"container");
-    uint32_t container_inner_offset = 0;
     uint32_t chunk_length = 0;
-    uint16_t container_inner_index = 0;
-
-    unsigned char container_buf[CONTAINER_SIZE]={0};
-    unsigned int container_buf_pointer = 0;
     uint32_t file_offset = 0;
     uint32_t n_read = 0;
-
     struct ENTRY_VALUE entry_value;
 
     // 重删统计
@@ -213,6 +215,7 @@ void writeFile(string path){
             GlobalMetadataManagerPtr->clear_base();
     }
 
+    
     // load metadata
     if(current_version != 0){
         if(dedupMethod == DEDUP_GLOBAL){
@@ -223,6 +226,7 @@ void writeFile(string path){
         }
     }
 
+    OutputContainer outContainer(Config::getInstance().getContainersPath().c_str(), CONTAINER, current_version);
 
     // 普通分块重删，来一个块查寻一次，然后把non-duplicate chunk保存到container去
     for(;;){
@@ -255,39 +259,38 @@ void writeFile(string path){
 
             // Write
             if(lookup_result == Unique){
-                // save chunk itself
-                saveChunkToContainer(container_buf_pointer, container_buf, 
-                                    container_index, container_inner_offset, container_inner_index,
-                                    chunk_length, file_offset, file_cache, (void*)&sha1_fp,
-                                    Config::getInstance().getContainersPath().c_str());
-                
-                // save chunk metadata
-                entry_value.container_number = container_index;
-                entry_value.offset = container_inner_offset;
-                entry_value.chunk_length = chunk_length;
-                entry_value.container_inner_index = container_inner_index;
-                entry_value.version = current_version;
-                entry_value.ref_cnt = 1;
+                // save chunk itself and metadata
+                outContainer.writeChunk(chunk_length, file_offset, file_cache, entry_value);
 
                 if(dedupMethod == DEDUP_GLOBAL){
                     GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value);
                 }else{
                     GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value, file_attr);
+                    
+                    // TODO：log container sequence
+                    // if (refContainers.empty() || container_index != refContainers.back()) {
+                    //     refContainers.push_back(container_index);
+                    // }
                 }
-
-                // rev
-                container_inner_offset += chunk_length;
-                container_buf_pointer += chunk_length;
-                container_inner_index ++;
-                rev_container_cnt ++;
 
             }else if(lookup_result == Dedup){
                 dedup_chunks ++;
                 dedup_size += chunk_length;
+                
+                if(dedupMethod == DEDUP_GLOBAL){
+                    GlobalMetadataManagerPtr->addRefCnt(sha1_fp);
+                }else{
+                    int containerId = GlobalMetadataManagerPtr->addRefCntgetContainer(sha1_fp, file_attr);
+                    
+                    // log container sequence
+                    if (refContainers.empty() || containerId != refContainers.back()) {
+                        refContainers.push_back(containerId);
+                    }
+                }
             }
 
             // Insert fingerprint into file recipe
-            file_recipe.push_back(std::string((char*)&sha1_fp, sizeof(struct SHA1FP)));
+            file_recipe.push_back(string((char*)&sha1_fp, sizeof(struct SHA1FP)));
 
             // Statistic
             sum_chunks ++;
@@ -296,11 +299,6 @@ void writeFile(string path){
             file_offset += chunk_length;
         }
     }
-
-    //  flush最后一个container
-    if(container_buf_pointer > 0)
-        saveContainer(container_index, container_buf, 
-                        container_buf_pointer, Config::getInstance().getContainersPath().c_str());
     
     // flush file_recipe
     saveFileRecipe(file_recipe, Config::getInstance().getFileRecipesPath().c_str());
@@ -324,9 +322,10 @@ void writeFile(string path){
             file_attr = ATTR_SLBASE;
     }
     
-    // save dedup ratio
+    // save dedup ratio and container index sequence
     if(dedupMethod != DEDUP_GLOBAL){
         saveDedupRatio(file_attr,cur_dr);
+        saveContainerIds(refContainers,current_version);
     }
     
     // update backup job
@@ -344,8 +343,11 @@ void writeFile(string path){
         GlobalMetadataManagerPtr->saveVersion(current_version, file_attr);
     }
 
-    do_delete(current_version);
-
+    if(dedupMethod != DEDUP_GLOBAL){
+        do_delete(current_version);
+        do_arrange(current_version);
+    }
+    
     // free 
     close(idf);
     free(file_cache);
@@ -354,10 +356,10 @@ void writeFile(string path){
 void traverseWriteDirectory(const fs::path& directory) {
     try {
         // 遍历目录
-        std::vector<fs::path> files = traverseDirectory(directory);
+        vector<fs::path> files = traverseDirectory(directory);
 
         // 对文件名进行排序
-        std::sort(files.begin(), files.end());
+        sort(files.begin(), files.end());
         
         for (const auto& path : files){
             writeFile(path);
@@ -366,8 +368,8 @@ void traverseWriteDirectory(const fs::path& directory) {
         }
             
         
-    } catch (const std::exception& ex) {
-        std::cerr << "Error: " << ex.what() << std::endl;
+    } catch (const exception& ex) {
+        cerr << "Error: " << ex.what() << endl;
     }
 }
 
@@ -390,7 +392,7 @@ int main(int argc, char** argv){
         string input_path = Config::getInstance().getInputPath();
 
         if (!fs::exists(input_path)) {
-            std::cerr << "Error: Input path does not exist." << std::endl;
+            cerr << "Error: Input path does not exist." << endl;
             return 1;
         }
 
@@ -432,6 +434,7 @@ int main(int argc, char** argv){
             GlobalMetadataManagerPtr->loadVersion(restore_version,true);
         }
 
+        //GlobalMetadataManagerPtr->printOriginTable();
         int base_container_max_value = GlobalMetadataManagerPtr->getBaseContainerMaxValue();
         printf("Base Container Max Value: %d\n", base_container_max_value);
 
@@ -447,7 +450,7 @@ int main(int argc, char** argv){
         int container_read_count = 0;
 
         //recipe
-        std::vector<std::string> file_recipe = getFileRecipe(restore_version, recipe_path.c_str());
+        vector<string> file_recipe = getFileRecipe(restore_version, recipe_path.c_str());
 
         //组装
         RESTORE_METHOD rm = Config::getInstance().getRestoreMethod();
@@ -477,7 +480,8 @@ int main(int argc, char** argv){
                 memcpy(&fp, x.data(), sizeof(SHA1FP));
                 ev = GlobalMetadataManagerPtr->getEntry(fp);
                 gettimeofday(&start2, NULL);
-                std::string ck_data = cc->getChunkData(ev);
+                string ck_data = cc->getChunkData(ev);
+                //printf("%s\n", ck_data.c_str());
 
                 gettimeofday(&end2, NULL);
                 total_time2 += (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
@@ -519,7 +523,7 @@ int main(int argc, char** argv){
             int buffered_CID = -1;
 
             int recipe_offset = 0;
-            std::vector<recipe_buffer_entry> recipe_buffer;
+            vector<recipe_buffer_entry> recipe_buffer;
             int write_length_from_recipe_buffer = 0;
             int faa_start = 0;
 

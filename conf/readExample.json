@@ -1,7 +1,7 @@
 {
   "Task": "restore",
-  "RestorePath": "/home/jyc/ssd/restore/restore1",
-  "RestoreVersion": 1,
+  "RestorePath": "/home/jyc/ssd/restore/restore0",
+  "RestoreVersion": 0,
   "ChunkingMethod": "cdc",
   "RestoreMethod": "container",
   "containersPath": "/home/jyc/hdd/deltaworking/Containers",
@@ -9,6 +9,7 @@
   "fingerprintsFilePath": "/home/jyc/hdd/deltaworking/metadata/fingerprints.meta",
   "fingerprintsDeltaDedupFolder": "/home/jyc/hdd/deltaworking/metadata/fingerprintsDeltaDedup",
   "dedupRatioFilePath": "/home/jyc/hdd/deltaworking/metadata/deltaHistoryDR.txt",
-  "cache_size": 16,
-  "DedupMethod": "manual"
+  "hotContainersPath": "/home/jyc/hdd/deltaworking/HotContainers",
+  "cache_size": 64,
+  "DedupMethod": "interval"
 }

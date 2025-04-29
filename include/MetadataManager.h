@@ -36,6 +36,7 @@ struct ENTRY_VALUE {
     uint16_t container_inner_index;
     uint32_t ref_cnt;
     uint32_t version;
+    CONTAINER_TYPE container_type;
 };
 
 // struct TupleHasher {
@@ -74,17 +75,23 @@ class MetadataManager {
         int loadVersion(int version, bool is_restore);
         
         LookupResult dedupLookup(SHA1FP sha1);
-        LookupResult dedupLookup(SHA1FP sha1, FILE_ATTR);
+        LookupResult dedupLookup(SHA1FP sha1, FILE_ATTR file_attr);
         int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value);
-        int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value, FILE_ATTR);
+        int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value, FILE_ATTR file_attr);
         int addRefCnt(const SHA1FP sha1);
-        int addRefCnt(const SHA1FP sha1,bool );
+        // 增加chunk引用次数，并返回所在containerId
+        int addRefCntgetContainer(const SHA1FP sha1,FILE_ATTR file_attr);
         ENTRY_VALUE getEntry(const SHA1FP sha1);
+        ENTRY_VALUE& getEntry(const SHA1FP sha1, FILE_ATTR file_attr);
         std::string genFPname(int version, FILE_ATTR file_attr);
         void loadDeltaDedupFp(std::string fp_name, bool is_restore);
+        //bool updateEntry(const SHA1FP sha1, const ENTRY_VALUE value);
 
         int getBaseContainerMaxValue();
         void clear_base();
+
+        void printOriginTable();
+        void printFPRefCnt();
 
     private:
         //为了判断delta容器和container容器，识别出base容器的最大值

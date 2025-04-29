@@ -57,6 +57,7 @@ class Config{
         int getAvgChunkSize(){return this->avg_chunk_size;}
         int getNormalLevel(){return this->normal_level;}
         bool getMerkleTree(){return this->merkle_tree;}
+        bool getArranged(){return this->arranged;}
         enum RESTORE_METHOD getRestoreMethod(){return this->rm;}
         int getCacheSize(){return this->cache_size;}
 
@@ -68,6 +69,8 @@ class Config{
         string getFullFileStoragePath(){return this->full_file_storage_path;}
         string getDedupRatioFilePath(){return this->dedup_ratio_file_path;}
         string getDeltaConfigFilePath(){return this->delta_config_file_path;}
+        string getContainerIndexPath(){return this->container_index_path;}
+        string getHotContainersPath(){return this->hot_containers_path;}
 
         string getMTL1(){return this->MTL1;}
         string getMTL2(){return this->MTL2;}
@@ -95,6 +98,7 @@ class Config{
         void setSize(int n){this->avg_chunk_size = n;}
         void setNormal(int n){this->normal_level = n;}
         void setMerkleTree(char* s){this->merkle_tree = yesNoTrans(s);}
+        void setArranged(char* s){this->arranged = yesNoTrans(s);}
         void setRestoreMethod(char* s){this->rm = restoreMethodTrans(s);}
         void setCacheSize(int n){this->cache_size = n;}
 
@@ -106,6 +110,8 @@ class Config{
         void setFullFileStoragePath(char* s){this->full_file_storage_path = s;}
         void setDedupRatioFilePath(char* s){this->dedup_ratio_file_path = s;}
         void setDeltaConfigFilePath(char* s){this->delta_config_file_path = s;}
+        void setContainerIndexPath(char* s){this->container_index_path = s;}
+        void setHotContainersPath(char* s){this->hot_containers_path = s;}
 
         void setMTL1(char* s){this->MTL1 = s;}
         void setMTL2(char* s){this->MTL2 = s;}
@@ -191,6 +197,10 @@ class Config{
                     Config::getInstance().setDedupRatioFilePath(valuestring);
                 }else if (strcmp(name, "deltaConfigFilePath") == 0) {
                     Config::getInstance().setDeltaConfigFilePath(valuestring);
+                }else if (strcmp(name, "containerIndexPath") == 0) {
+                    Config::getInstance().setContainerIndexPath(valuestring);
+                }else if (strcmp(name, "hotContainersPath") == 0) {
+                    Config::getInstance().setHotContainersPath(valuestring);
                 }
                 else if (strcmp(name, "MTL1") == 0) {
                     Config::getInstance().setMTL1(valuestring);
@@ -216,6 +226,8 @@ class Config{
                     Config::getInstance().setDedupMethod(valuestring);
                 }else if (strcmp(name, "sml_dr") == 0) {
                     Config::getInstance().setSmlDR(val_int);
+                }else if (strcmp(name, "arranged") == 0) {
+                    Config::getInstance().setArranged(valuestring);
                 }
             }
         }
@@ -253,6 +265,9 @@ class Config{
         int sml_dr;
         string dedup_ratio_file_path;   // 写入历史版本的属性和重删率
         string delta_config_file_path;  // DEDUP_MANUAL参数   delta或base的设置文件路径
+        string container_index_path;  //引用的容器顺序
+        string hot_containers_path;  //重排的容器路径
+        bool arranged;   //是否重排
 
         int retain_version_number;      //系统中保留版本的个数
 
@@ -261,6 +276,7 @@ class Config{
             avg_chunk_size = 4096;
             normal_level = 2;
             merkle_tree = false;
+            arranged = false;
         }
 
         enum TASK_TYPE taskTypeTrans(char* s){
