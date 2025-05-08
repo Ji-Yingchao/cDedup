@@ -112,16 +112,16 @@ pair<int, int> ContainerCache::countBaseAndDelta(uint64_t threshold) {
 void ContainerCache::printContainers(int base_container_max_value){
     // 读取容器的次数
     int container_read_count = this->getReferenceContainerCount();
-    auto [base_counter, delta_container] = this->countBaseAndDelta(base_container_max_value);
     printf("Read Container Count: %d\n", container_read_count);
-    printf("Read Base Container Count: %d\n", base_counter);
-    printf("Read Delta Container Count: %d\n", delta_container);
+    // auto [base_counter, delta_container] = this->countBaseAndDelta(base_container_max_value);
+    // printf("Read Base Container Count: %d\n", base_counter);
+    // printf("Read Delta Container Count: %d\n", delta_container);
 
-    // 去重后是引用容器的个数
+    // // 去重后是引用容器的个数
     this->removeDuplicates();
     int reference_containers_count = this->getReferenceContainerCount(); 
-    auto [r_base_counter, r_delta_container] = this->countBaseAndDelta(base_container_max_value);
     printf("Reference Container Count: %d\n", reference_containers_count);
-    printf("Reference Base Container Count: %d\n", r_base_counter);
-    printf("Reference Delta Container Count: %d\n", r_delta_container);
+    // auto [r_base_counter, r_delta_container] = this->countBaseAndDelta(base_container_max_value);
+    // printf("Reference Base Container Count: %d\n", r_base_counter);
+    // printf("Reference Delta Container Count: %d\n", r_delta_container);
 }

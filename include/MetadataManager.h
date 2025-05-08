@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include "general.h"
 #include "deltaDedup_stats.h"
+#include "container.h"
 
 enum LookupResult {
     Unique,
@@ -92,10 +93,12 @@ class MetadataManager {
 
         void printOriginTable();
         void printFPRefCnt();
+        void printBaseTable();
 
     private:
         //为了判断delta容器和container容器，识别出base容器的最大值
         int base_container_max_value = 0;
+        int base_version;
 
         std::string metadata_file_path;
         // FP-index used for normal deduplication

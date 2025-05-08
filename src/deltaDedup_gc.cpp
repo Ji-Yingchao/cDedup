@@ -83,9 +83,9 @@ void do_delete(int current_version){
 
         // DeltaDedup GC
         if(Config::getInstance().getDedupMethod() != DEDUP_GLOBAL){
-            vector<pair<string, double>> dr_vec = loadAllDedupRatios();
+            vector<AttrWithDR> dr_vec = loadAllDedupRatios();
             //auto [attr, dr] = dr_vec.at(delete_version);
-            FILE_ATTR file_attr = string_to_attr(dr_vec.at(delete_version).first);
+            FILE_ATTR file_attr = dr_vec.at(delete_version).attr;
             
             if(file_attr == ATTR_DELTA){
                 deleteFile(delete_version, ATTR_DELTA);
@@ -93,12 +93,12 @@ void do_delete(int current_version){
 
             //如果连续删除，删掉最后一个delta或sbase版本之后，删除该版本对应的base
             if(delete_version+1 < dr_vec.size()){
-                if(dr_vec.at(delete_version+1).first == "slbase"){
+                if(dr_vec.at(delete_version+1).attr == ATTR_SLBASE){
                     auto [last_slbase_version, last_base_version]= findNearestBaseBefore(dr_vec, delete_version);
                     if(last_slbase_version != -1)
                         deleteFile(last_slbase_version, ATTR_SLBASE); //删除对应的sbase
                 }
-                else if(dr_vec.at(delete_version+1).first == "base"){
+                else if(dr_vec.at(delete_version+1).attr == ATTR_BASE){
                     auto [last_slbase_version, last_base_version]= findNearestBaseBefore(dr_vec, delete_version);
                     if(last_slbase_version != -1)
                         deleteFile(last_slbase_version, ATTR_SLBASE); 

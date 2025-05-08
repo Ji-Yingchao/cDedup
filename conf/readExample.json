@@ -1,7 +1,7 @@
 {
   "Task": "restore",
-  "RestorePath": "/home/jyc/ssd/restore/restore0",
-  "RestoreVersion": 0,
+  "RestorePath": "/home/jyc/ssd/restore/restore2",
+  "RestoreVersion": 2,
   "ChunkingMethod": "cdc",
   "RestoreMethod": "container",
   "containersPath": "/home/jyc/hdd/deltaworking/Containers",
@@ -11,5 +11,5 @@
   "dedupRatioFilePath": "/home/jyc/hdd/deltaworking/metadata/deltaHistoryDR.txt",
   "hotContainersPath": "/home/jyc/hdd/deltaworking/HotContainers",
   "cache_size": 64,
-  "DedupMethod": "interval"
+  "DedupMethod": "manual"
 }

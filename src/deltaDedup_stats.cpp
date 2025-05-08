@@ -30,7 +30,7 @@ void saveDedupRatio(FILE_ATTR file_attr, double dr) {
     close(fd);
 }
 
-pair<string, double> loadDedupRatioAtLine(int target_line) {
+AttrWithDR loadDedupRatioAtLine(int target_line) {
     string dedup_ratio_file = Config::getInstance().getDedupRatioFilePath();
     ifstream infile(dedup_ratio_file);
     if (!infile.is_open()) {
@@ -39,6 +39,7 @@ pair<string, double> loadDedupRatioAtLine(int target_line) {
     }
 
     string line,attr;
+    FILE_ATTR file_attr;
     int current_line = 0;
     double dr;
 
@@ -51,7 +52,8 @@ pair<string, double> loadDedupRatioAtLine(int target_line) {
                     cerr << "Failed to parse line " << target_line << ": " << line << endl;
                     exit(-1);
                 }
-                return {attr, dr};
+                file_attr = string_to_attr(attr);
+                return {file_attr, dr};
             }
             current_line++;
         }
@@ -63,7 +65,7 @@ pair<string, double> loadDedupRatioAtLine(int target_line) {
 }
 
 
-vector<pair<string, double>> loadAllDedupRatios() {
+vector<AttrWithDR> loadAllDedupRatios() {
     string dedup_ratio_file = Config::getInstance().getDedupRatioFilePath();
     ifstream infile(dedup_ratio_file);
     if (!infile.is_open()) {
@@ -71,34 +73,34 @@ vector<pair<string, double>> loadAllDedupRatios() {
         exit(-1);
     }
 
-    vector<pair<string, double>> results;
+    vector<AttrWithDR> results;
     string line;
     string attr;
     double dr;
+    FILE_ATTR file_attr;
     while (getline(infile, line)) {
         if (line.empty()) continue;
-        // string attr;
-        // double dr;
         stringstream ss(line);
         ss >> attr >> dr;
         if (ss.fail()) {
             cerr << "Failed to parse line: " << line << endl;
             continue;  // 可选：跳过错误行而不是退出
         }
-        results.emplace_back(attr, dr);
+        file_attr = string_to_attr(attr);
+        results.emplace_back(file_attr, dr);
     }
     infile.close();
     return results;
 }
 
 // 找到上一个small base和 base (-1就是对应的值没找到)
-pair<int, int> findNearestBaseBefore(const vector<pair<string, double>>& dr_vec, int current_index) {
+pair<int, int> findNearestBaseBefore(const vector<AttrWithDR>& dr_vec, int current_index) {
     int slbase_index = -1; 
     for (int i = current_index; i >= 0; --i) {   // i = current_index-1
-        if (dr_vec[i].first == "slbase" && slbase_index == -1) {
+        if (dr_vec[i].attr == ATTR_SLBASE && slbase_index == -1) {
             slbase_index = i;  // 只记录第一个遇到的 slbase
         }
-        if (dr_vec[i].first == "base") {
+        if (dr_vec[i].attr == ATTR_BASE) {
             return {slbase_index, i};  // 第一个是 slbase，第二个是 base
         }
     }
@@ -106,12 +108,12 @@ pair<int, int> findNearestBaseBefore(const vector<pair<string, double>>& dr_vec,
 }
 
 
-vector<string> loadDeltaAttrs(){
+vector<FILE_ATTR> loadDeltaAttrs(){
     string deltaConfigFilePath = Config::getInstance().getDeltaConfigFilePath();
     ifstream infile(deltaConfigFilePath);  
-    vector<string> attrs;
+    vector<FILE_ATTR> attrs;
     string line,attr;
-
+    FILE_ATTR file_attr;
     if (!infile) {
         cerr << "loadDeltaAttrs open error" << endl;
         exit(-1);
@@ -120,7 +122,8 @@ vector<string> loadDeltaAttrs(){
     while (getline(infile, line)) {
         stringstream ss(line);
         ss >> attr;
-        attrs.push_back(attr);  
+        file_attr = string_to_attr(attr);
+        attrs.push_back(file_attr);  
     }
 
     infile.close();
@@ -146,25 +149,6 @@ FILE_ATTR string_to_attr(const string& str) {
     if (str == "slbase") return ATTR_SLBASE;
     if (str == "delta") return ATTR_DELTA;
     throw invalid_argument("Unknown FILE_ATTR string");
-    exit(-1);
-}
-
-string container_type_to_string(CONTAINER_TYPE type){
-    switch (type) {
-        case HOT_CONTAINER: return "hot_container";
-        case COLD_CONTAINER: return "cold_container";
-        case CONTAINER:      return "container";
-        default:    
-            throw invalid_argument("Unknown CONTAINER_TYPE value");
-            exit(-1);
-    }
-}
-
-CONTAINER_TYPE string_to_container_type(const string& str){
-    if (str == "hot_container") return HOT_CONTAINER;
-    if (str == "cold_container") return COLD_CONTAINER;
-    if (str == "container") return CONTAINER;
-    throw invalid_argument("Unknown CONTAINER_TYPE string");
     exit(-1);
 }
 

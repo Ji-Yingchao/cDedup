@@ -37,7 +37,6 @@ void OutputContainer::writeChunk(int chunk_length, int file_offset, unsigned cha
     entry_value.offset = innerOffset_;
     entry_value.chunk_length = chunk_length;
     entry_value.container_inner_index = innerIndex_;
-    // TODO: 版本还未确定
     entry_value.version = version_;
     entry_value.ref_cnt = 1;
     entry_value.container_type = CONTAINER;

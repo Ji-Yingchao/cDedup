@@ -25,6 +25,7 @@
 #include "FAA.h"
 #include "config.h"
 #include "recipe.h"
+#include "container.h"
 #include "deltaDedup_stats.h"
 #include "deltaDedup_gc.h"
 #include "OutputContainer.h"
@@ -56,47 +57,60 @@ void flushAssemblingBuffer(int fd, unsigned char* buf, int len){
 }
 
 void do_arrange(int current_version){
-    if(!Config::getInstance().getArranged() || current_version < 2) return ;
+    if(!Config::getInstance().getArranged() || current_version < 1) return ;
     
-    vector<pair<string, double>> dr_vec = loadAllDedupRatios();
-    int arrange_version = current_version-2;
-    FILE_ATTR file_attr = string_to_attr(dr_vec.at(arrange_version).first);
-    
+    // 根据历史记录查找之前的base
+    int arrange_version;
+    vector<AttrWithDR> dr_vec = loadAllDedupRatios();
+    arrange_version = current_version-1;
+    FILE_ATTR file_attr = dr_vec.at(arrange_version).attr;
     if(file_attr != ATTR_BASE) return ;
-    printf("-------------Begin to arrange file version %d-----------\n",arrange_version);
 
+    //根据属性设置查找之后的base(最后的delta)
+    // vector<FILE_ATTR> attrs = loadDeltaAttrs();
+    // if(current_version + 1 < attrs.size() && attrs.at(current_version+1) == ATTR_BASE){
+    //     vector<AttrWithDR> dr_vec = loadAllDedupRatios();
+    //     auto [slbase_version, base_version] = findNearestBaseBefore(dr_vec, current_version);
+    //     arrange_version = base_version;
+    // }
+    
+    printf("-------------Begin to arrange file version %d-----------\n",arrange_version);
     unordered_set<int> usedContainers;
     vector<string> file_recipe = getFileRecipe(arrange_version, Config::getInstance().getFileRecipesPath().c_str());
     ContainerCache* cc = new ContainerCache(Config::getInstance().getContainersPath().c_str(), 64);
     OutputContainer hotContainer(Config::getInstance().getHotContainersPath().c_str(), HOT_CONTAINER, arrange_version);
     OutputContainer coldContainer(Config::getInstance().getContainersPath().c_str(), COLD_CONTAINER, arrange_version);
 
-    SHA1FP fp;
+    SHA1FP fp;  
     for(auto& x : file_recipe){
         memcpy(&fp, x.data(), sizeof(SHA1FP));
         ENTRY_VALUE& entry = GlobalMetadataManagerPtr->getEntry(fp, ATTR_BASE);
-        usedContainers.insert(entry.container_number);
 
         if (entry.container_type == CONTAINER){
+            usedContainers.insert(entry.container_number);
+
             // write to new container and update metadata
             string ck_data = cc->getChunkData(entry);
             if(entry.ref_cnt >= 2)
                 hotContainer.writeChunk(ck_data, entry);
+                
             else 
                 coldContainer.writeChunk(ck_data,entry);
         }
     }
 
     //save metadata
-    GlobalMetadataManagerPtr->saveVersion(arrange_version, file_attr);
+    GlobalMetadataManagerPtr->saveVersion(arrange_version, ATTR_BASE);
 
     // delete used container
     for (const auto& cid : usedContainers) {
         string path = Config::getInstance().getContainersPath() + "/container" + to_string(cid);
         if (remove(path.c_str()) != 0) {
             cerr << "Failed to delete container: " << path << endl;
+            exit(-1);
         }
     }
+    usedContainers.clear();
     
 }
 
@@ -199,7 +213,7 @@ void writeFile(string path){
     else if(dedupMethod == DEDUP_AUTOMATIC && current_version != 0){    //版本0,初始值满足动态要求
         uint32_t min_dr = Config::getInstance().getMinDR(); 
         auto [attr, dr] = loadDedupRatioAtLine(current_version-1);
-        bool clear_base = dr < (double)min_dr/100 && attr == "delta";
+        bool clear_base = dr < (double)min_dr/100 && attr == ATTR_DELTA;
         if(clear_base)
             GlobalMetadataManagerPtr->clear_base();
 
@@ -207,11 +221,11 @@ void writeFile(string path){
         file_attr = clear_base ? ATTR_BASE : ATTR_DELTA;
     }
     else if(dedupMethod == DEDUP_MANUAL){
-        vector<string> attrs = loadDeltaAttrs();
-        file_attr = string_to_attr(attrs.at(current_version));
+        vector<FILE_ATTR> attrs = loadDeltaAttrs();
+        file_attr = attrs.at(current_version);
 
         // TODO: 如果有多个small base，也需要清除之前的sbase，但是base和sbase混用
-        if(current_version+1 < attrs.size() && attrs.at(current_version+1) == "base")
+        if(current_version+1 < attrs.size() && attrs.at(current_version+1) == ATTR_BASE)
             GlobalMetadataManagerPtr->clear_base();
     }
 
@@ -225,6 +239,8 @@ void writeFile(string path){
             GlobalMetadataManagerPtr->loadVersion(current_version-1,false);
         }
     }
+
+    //GlobalMetadataManagerPtr->printBaseTable();
 
     OutputContainer outContainer(Config::getInstance().getContainersPath().c_str(), CONTAINER, current_version);
 
@@ -435,8 +451,10 @@ int main(int argc, char** argv){
         }
 
         //GlobalMetadataManagerPtr->printOriginTable();
+        //GlobalMetadataManagerPtr->printFPRefCnt();
         int base_container_max_value = GlobalMetadataManagerPtr->getBaseContainerMaxValue();
         printf("Base Container Max Value: %d\n", base_container_max_value);
+
 
         struct timeval restore_time_start, restore_time_end;
         gettimeofday(&restore_time_start, NULL);
@@ -507,7 +525,7 @@ int main(int argc, char** argv){
                ((ContainerCache*)cc)->printContainers(base_container_max_value);
             }else if(rm == INDENPENDENT_CACHE){
                 container_read_count = ((IndependentCache*)cc)->getReferenceContainerCount();
-               ((IndependentCache*)cc)->printContainers(base_container_max_value);
+               //((IndependentCache*)cc)->printContainers(base_container_max_value);
             }
             
 

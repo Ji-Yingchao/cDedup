@@ -33,6 +33,7 @@ int MetadataManager::saveVersion(int current_version, FILE_ATTR file_attr){
             write(fd, (uint8_t*)&item.first, sizeof(SHA1FP));
             write(fd, (uint8_t*)&item.second, sizeof(ENTRY_VALUE));
         }
+        saveVersion(this->base_version, ATTR_BASE); //重删时，base版本的entry.ref_cnt发生变化，需要重新写入
     }else{
         printf("Saving fp error\n");
         exit(-1);
@@ -61,9 +62,9 @@ string MetadataManager::genFPname(int version, FILE_ATTR file_attr){
 int MetadataManager::loadVersion(int version, bool is_restore){
     // 恢复时：如果该版本是base，只需加载base的fp；如果该版本是delta，需要加载它前面一个base的fp和它自己的fp
     // 写入时：因为加载前一个版本所以加载base的fp；如果该版本是delta，需要加载它前面一个base的fp   (如果写入base本身，不需要加载fp)
-    vector<pair<string, double>> attr_vec = loadAllDedupRatios();
+    vector<AttrWithDR> attr_vec = loadAllDedupRatios();
     auto [attr, dr] = attr_vec.at(version);
-    FILE_ATTR file_attr = string_to_attr(attr);
+    FILE_ATTR file_attr = attr;
 
     string fp_name = genFPname(version, file_attr);
     if(file_attr == ATTR_BASE){
@@ -78,6 +79,7 @@ int MetadataManager::loadVersion(int version, bool is_restore){
         if(last_base_version != -1){
             string base_file = genFPname(last_base_version, ATTR_BASE);
             loadDeltaDedupFp(base_file,is_restore);
+            this->base_version = last_base_version;
         }
         if(is_restore && file_attr == ATTR_DELTA){
             loadDeltaDedupFp(fp_name,is_restore);
@@ -269,19 +271,55 @@ void MetadataManager::clear_base(){
     fp_table_base.clear(); 
 }
 
+
+//以下函数为测试作用
 void MetadataManager::printOriginTable(){
     unordered_map<CONTAINER_TYPE, unordered_set<int>> reference_containers;
-    int hot = 0, cold = 0, common = 0;
+    int min = 555555;
     for(auto& x :this->fp_table_origin){
         reference_containers[x.second.container_type].insert(x.second.container_number);
+        if(x.second.container_number < min)
+            min = x.second.container_number;
     }
-    printf("hot container:  %d \n", reference_containers[HOT_CONTAINER].size());
-    printf("cold container:  %d \n", reference_containers[COLD_CONTAINER].size());
-    printf("container:  %d \n", reference_containers[CONTAINER].size());
+    printf("hot container:  %ld \n", reference_containers[HOT_CONTAINER].size());
+    printf("cold container:  %ld \n", reference_containers[COLD_CONTAINER].size());
+    printf("container:  %ld \n", reference_containers[CONTAINER].size());
+    printf("min container:  %d \n", min);
 }
 
-void printFPRefCnt(){
+void MetadataManager::printBaseTable(){
+    int min = 555555;
+    int delta_min = 555555;
+    unordered_set<int> usedContainers;
+    for(auto& x :this->fp_table_base){
+        usedContainers.insert(x.second.container_number);
+        if(x.second.container_number < min)
+            min = x.second.container_number;
+    }
+    for(auto& x :this->fp_table_delta){
+        if(x.second.container_number < delta_min)
+            delta_min = x.second.container_number;
+    }
+    printf("min base container:  %d \n", min);
+    printf("delta table size: %ld\n",this->fp_table_delta.size());
+    printf("ref container: %ld\n",usedContainers.size());
+}
 
+void MetadataManager::printFPRefCnt(){
+    int count[11] = {0}; // 下标1-10有效，count[0]不用
+    
+    for (auto& x : this->fp_table_origin) {
+        if (x.second.ref_cnt >= 1 && x.second.ref_cnt <= 10) {
+            count[x.second.ref_cnt]++;
+        }else if(x.second.ref_cnt > 10){ // count[0]记录引用次数大于10的chunk块
+            count[0]++;
+        }
+    }
+
+    // 输出结果
+    for (int i = 0; i <= 10; ++i) {
+        std::cout << "引用次数为" << i << "的chunk有" << count[i] << "个" << std::endl;
+    }
 }
 
 

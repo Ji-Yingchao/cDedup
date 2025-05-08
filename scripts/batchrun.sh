@@ -1,5 +1,7 @@
 folder_path="/home/jyc/ssd/dataset/LLVM/"
 files=$(ls $folder_path | sort -V)
+count=0
+
 for new_file_path in $files
 do
     full_path=$folder_path$new_file_path
@@ -7,6 +9,13 @@ do
     mv ../conf/temp.json ../conf/writeExample.json
     # ../cDedup ../conf/writeExample.json | grep "throughput(MB/s)" | awk '{print $2}'
     ../cDedup ../conf/writeExample.json | grep "Dedup Ratio" | awk '{print $3}'
+
+    ((count++))        # 每次循环计数器加1
+    if [ "$count" -eq 5 ]; then
+        echo "到第十次了，跳出循环"
+        break
+    fi
+
 done
 
 # 多值筛选输出

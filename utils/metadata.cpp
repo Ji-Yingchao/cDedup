@@ -36,7 +36,7 @@ std::vector<uint32_t> getContainerIds(std::string fp_name, uint64_t file_size){
     unsigned char* metadata_cache = (unsigned char*)malloc(FILE_CACHE);
     int fd = open(fp_name.c_str(), O_RDONLY);
     if(fd < 0){
-        printf("Open file %s failed\n", fp_name);
+        printf("Open file %s failed\n", fp_name.c_str());
         exit(-1);
     }
     

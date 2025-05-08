@@ -3,6 +3,7 @@
 
 #include "MetadataManager.h"
 #include "deltaDedup_stats.h"
+#include "container.h"
 #include <string>
 #include <cstdint>
 
