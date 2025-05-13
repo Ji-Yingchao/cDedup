@@ -5,6 +5,9 @@
 
 string ContainerCache::getChunkData(ENTRY_VALUE ev){
     ContainerKey key = {ev.container_type, ev.container_number};
+
+    //this->average_containers[ev.container_type]++;
+
     auto numberIter = this->container_index_set.find(key);
     if(numberIter != this->container_index_set.end()){
         //cache hit
@@ -34,6 +37,7 @@ void ContainerCache::loadContainer(int container_index, CONTAINER_TYPE container
     int fd = open(container_name.data(), O_RDONLY | O_DIRECT);
     if (fd == -1) {
         printf("open container error: %s\n", strerror(errno));
+        printf("container path: %s\n", container_name.c_str());
         exit(-1);
     }
 
@@ -68,6 +72,9 @@ int ContainerCache::getReferenceContainerCount(){
     int total_count = 0;
     for (const auto& [type, ids] : this->reference_containers) {
         total_count += ids.size();
+
+        //int x= this->average_containers[type]/ids.size();
+        //printf("%s容器平均chunk数: %d\n", container_type_to_string(type).c_str(),x);
         //printf("%s: %d\n", container_type_to_string(type).c_str(),ids.size());
     }
     return total_count;

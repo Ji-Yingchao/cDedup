@@ -44,7 +44,8 @@ class ContainerCache : public Cache{
         void evictContainerFIFO();
 
         // 恢复时引用的容器
-        unordered_map<CONTAINER_TYPE, vector<int>> reference_containers;  
+        unordered_map<CONTAINER_TYPE, vector<int>> reference_containers; 
+        unordered_map<CONTAINER_TYPE, int>  average_containers;  
 
         void removeDuplicates();
         pair<int, int> countBaseAndDelta(uint64_t threshold);

@@ -40,7 +40,7 @@ Init DR 0.60
 -----------------------Loading FP-index DeltaDedup-----------------------
 Loading index: /home/jyc/hdd/deltaworking/metadata/fingerprintsDeltaDedup/fp_0_base
 metadata table load 186293 items
-引用次数为0的chunk有3450个
+引用次数为10以上的chunk有3450个
 引用次数为1的chunk有52527个
 引用次数为2的chunk有244个
 引用次数为3的chunk有129个

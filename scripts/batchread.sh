@@ -3,15 +3,15 @@
 
 # 恢复，一次测
 # folder_path="/home/jyc/ssd/restore/restore"
-# for i in {0..16};
+# for i in {0..99};
 # do
 #     full_path=$folder_path$i
 #     jq --arg full_path "$full_path" '.RestorePath = $full_path' ../conf/readExample.json > ../conf/temp.json
 #     mv ../conf/temp.json ../conf/readExample.json
 #     jq ".RestoreVersion = ${i}" ../conf/readExample.json > ../conf/temp.json 
 #     mv ../conf/temp.json ../conf/readExample.json
-#     ../cDedup ../conf/readExample.json | grep "Restore Throughput" | awk '{print $3}'
-#     # ../cDedup ../conf/readExample.json | grep "Reference Container Count" | awk '{print $4}'
+#     # ../cDedup ../conf/readExample.json | grep "Restore Throughput" | awk '{print $3}'
+#     ../cDedup ../conf/readExample.json | grep "Read Container Count" | awk '{print $4}'
 #     # ../cDedup ../conf/readExample.json | grep "Base Container Max Value" | awk '{print $5}'
 # done
 
@@ -35,7 +35,11 @@ do
     mv ../conf/temp.json ../conf/readExample.json
     jq ".RestoreVersion = ${i}" ../conf/readExample.json > ../conf/temp.json 
     mv ../conf/temp.json ../conf/readExample.json
-    ../cDedup ../conf/readExample.json | grep "Read Container Count" | awk '{print $4}' >> result_container_count.txt
+    ../cDedup ../conf/readExample.json | grep -E "Read Container Count|Reference Container Count|Restore Throughput" | awk '
+    /Read Container Count/ {read_counter = $4}
+    /Reference Container Count/ {ref_counter = $4}
+    /Restore Throughput/ {speed = $3}
+    END {print read_counter "\t" ref_counter "\t" speed}' >> results_read.txt
     ((i++))
 done
 

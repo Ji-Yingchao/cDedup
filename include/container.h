@@ -17,6 +17,8 @@ struct ContainerKey {
     CONTAINER_TYPE type;
     int containerId;
 
+    //ContainerKey() = default; 
+
     // 重载 ==，unordered_map 需要
     bool operator==(const ContainerKey& other) const {
         return type == other.type && containerId == other.containerId;

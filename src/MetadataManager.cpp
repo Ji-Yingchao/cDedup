@@ -14,9 +14,9 @@
 MetadataManager *GlobalMetadataManagerPtr;
 
 int MetadataManager::saveVersion(int current_version, FILE_ATTR file_attr){
-    //printf("-----------------------Saving One File FP-index-----------------------\n");
+    // printf("-----------------------Saving One File FP-index-----------------------\n");
+    // printf("Saving index: %s\n", fp_name.c_str());
     std::string fp_name = genFPname(current_version, file_attr);
-
     int fd = open(fp_name.c_str(), O_RDWR | O_CREAT, 0777);
     if(fd < 0){
         perror("Saving fp index error, the reason is ");
@@ -69,6 +69,7 @@ int MetadataManager::loadVersion(int version, bool is_restore){
     string fp_name = genFPname(version, file_attr);
     if(file_attr == ATTR_BASE){
         loadDeltaDedupFp(fp_name,is_restore);
+        this->base_version = version;
     }else{
         // 写入时加载元数据，不需要加载delta版本的fp
         auto [last_slbase_version, last_base_version]= findNearestBaseBefore(attr_vec, version);
@@ -269,6 +270,12 @@ int MetadataManager::getBaseContainerMaxValue(){
 
 void MetadataManager::clear_base(){
     fp_table_base.clear(); 
+}
+
+void MetadataManager::init_arranged(){
+    for(auto& x:this->fp_table_base){
+        x.second.is_arranged = false;
+    }
 }
 
 

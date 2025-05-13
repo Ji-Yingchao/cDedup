@@ -40,6 +40,7 @@ void OutputContainer::writeChunk(int chunk_length, int file_offset, unsigned cha
     entry_value.version = version_;
     entry_value.ref_cnt = 1;
     entry_value.container_type = CONTAINER;
+    entry_value.is_arranged = false;
     
     bufPointer_ += chunk_length;
     innerOffset_ += chunk_length;
@@ -59,6 +60,7 @@ void OutputContainer::writeChunk(const string& chunk_data, ENTRY_VALUE& value) {
     value.offset = innerOffset_;
     value.container_inner_index = innerIndex_;
     value.container_type = string_to_container_type(container_type);
+    value.is_arranged = true;
     
     bufPointer_ += len;
     innerOffset_ += len;

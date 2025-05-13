@@ -38,6 +38,7 @@ struct ENTRY_VALUE {
     uint32_t ref_cnt;
     uint32_t version;
     CONTAINER_TYPE container_type;
+    bool is_arranged;
 };
 
 // struct TupleHasher {
@@ -90,6 +91,7 @@ class MetadataManager {
 
         int getBaseContainerMaxValue();
         void clear_base();
+        void init_arranged();
 
         void printOriginTable();
         void printFPRefCnt();

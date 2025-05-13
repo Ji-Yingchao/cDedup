@@ -1,4 +1,4 @@
-folder_path="/home/jyc/ssd/dataset/LLVM/"
+folder_path="/home/cyf/ssd0/SFD_TAR/"
 files=$(ls $folder_path | sort -V)
 count=0
 
@@ -10,11 +10,11 @@ do
     # ../cDedup ../conf/writeExample.json | grep "throughput(MB/s)" | awk '{print $2}'
     ../cDedup ../conf/writeExample.json | grep "Dedup Ratio" | awk '{print $3}'
 
-    ((count++))        # 每次循环计数器加1
-    if [ "$count" -eq 5 ]; then
-        echo "到第十次了，跳出循环"
-        break
-    fi
+    # ((count++))       
+    # if [ "$count" -eq 5 ]; then  
+    #     echo "到第十次了，跳出循环"
+    #     break
+    # fi
 
 done
 

@@ -60,9 +60,13 @@ void do_arrange(int current_version){
     if(!Config::getInstance().getArranged() || current_version < 1) return ;
     
     // 根据历史记录查找之前的base
-    int arrange_version;
     vector<AttrWithDR> dr_vec = loadAllDedupRatios();
-    arrange_version = current_version-1;
+    if(dr_vec.at(current_version).attr == ATTR_BASE) return ;
+
+    auto [slbase_version, base_version] = findNearestBaseBefore(dr_vec, current_version);
+    int arrange_version = base_version;
+    int ref_count = current_version - arrange_version + 1; 
+    //int arrange_version = current_version-1;
     FILE_ATTR file_attr = dr_vec.at(arrange_version).attr;
     if(file_attr != ATTR_BASE) return ;
 
@@ -75,7 +79,8 @@ void do_arrange(int current_version){
     // }
     
     printf("-------------Begin to arrange file version %d-----------\n",arrange_version);
-    unordered_set<int> usedContainers;
+    GlobalMetadataManagerPtr->init_arranged();
+    unordered_set<ContainerKey, ContainerKeyHash> usedContainers;
     vector<string> file_recipe = getFileRecipe(arrange_version, Config::getInstance().getFileRecipesPath().c_str());
     ContainerCache* cc = new ContainerCache(Config::getInstance().getContainersPath().c_str(), 64);
     OutputContainer hotContainer(Config::getInstance().getHotContainersPath().c_str(), HOT_CONTAINER, arrange_version);
@@ -86,14 +91,14 @@ void do_arrange(int current_version){
         memcpy(&fp, x.data(), sizeof(SHA1FP));
         ENTRY_VALUE& entry = GlobalMetadataManagerPtr->getEntry(fp, ATTR_BASE);
 
-        if (entry.container_type == CONTAINER){
-            usedContainers.insert(entry.container_number);
+        if (!entry.is_arranged){
+            ContainerKey key = {entry.container_type, entry.container_number};
+            usedContainers.insert(key);
 
             // write to new container and update metadata
             string ck_data = cc->getChunkData(entry);
             if(entry.ref_cnt >= 2)
-                hotContainer.writeChunk(ck_data, entry);
-                
+                hotContainer.writeChunk(ck_data, entry);   
             else 
                 coldContainer.writeChunk(ck_data,entry);
         }
@@ -103,8 +108,15 @@ void do_arrange(int current_version){
     GlobalMetadataManagerPtr->saveVersion(arrange_version, ATTR_BASE);
 
     // delete used container
+    string path_prefix;
+    string path;
     for (const auto& cid : usedContainers) {
-        string path = Config::getInstance().getContainersPath() + "/container" + to_string(cid);
+        if(cid.type == HOT_CONTAINER)
+            path_prefix = Config::getInstance().getHotContainersPath();
+        else
+            path_prefix = Config::getInstance().getContainersPath();
+        //string path = Config::getInstance().getContainersPath() + "/" + container_type_to_string(cid.type) + to_string(cid.containerId);
+        path = path_prefix + "/" + container_type_to_string(cid.type) + to_string(cid.containerId);
         if (remove(path.c_str()) != 0) {
             cerr << "Failed to delete container: " << path << endl;
             exit(-1);
@@ -240,8 +252,6 @@ void writeFile(string path){
         }
     }
 
-    //GlobalMetadataManagerPtr->printBaseTable();
-
     OutputContainer outContainer(Config::getInstance().getContainersPath().c_str(), CONTAINER, current_version);
 
     // 普通分块重删，来一个块查寻一次，然后把non-duplicate chunk保存到container去
@@ -352,12 +362,18 @@ void writeFile(string path){
     bj.hash_collision_sum += hash_collision_sum;
     bj.file_num++;
 
+    // GlobalMetadataManagerPtr->loadVersion(0,true); 
+    // GlobalMetadataManagerPtr->printOriginTable();
+
     // save fp-entry metadata
     if(dedupMethod == DEDUP_GLOBAL){
         GlobalMetadataManagerPtr->save();
     }else{
         GlobalMetadataManagerPtr->saveVersion(current_version, file_attr);
     }
+
+    // GlobalMetadataManagerPtr->loadVersion(0,true); 
+    // GlobalMetadataManagerPtr->printOriginTable();
 
     if(dedupMethod != DEDUP_GLOBAL){
         do_delete(current_version);
