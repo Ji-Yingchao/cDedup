@@ -227,19 +227,19 @@ int MetadataManager::addNewEntry(SHA1FP sha1, ENTRY_VALUE value, FILE_ATTR file_
 }
 
 // delta版本的重复块可以来自delta和base，base只来自base
-int MetadataManager::addRefCntgetContainer(const SHA1FP sha1, FILE_ATTR file_attr){
+ENTRY_VALUE MetadataManager::addRefCntgetEntry(const SHA1FP sha1, FILE_ATTR file_attr){
     if(file_attr != ATTR_BASE){
         auto dedupIter = this->fp_table_delta.find(sha1);
         if(dedupIter != this->fp_table_delta.end()){
             ++dedupIter->second.ref_cnt;
-            // 返回容器索引
-            return dedupIter->second.container_number;
+            // 返回entry_value
+            return dedupIter->second;
         } 
     }
     auto dedupIter = this->fp_table_base.find(sha1);
     if(dedupIter != this->fp_table_base.end()){
         ++dedupIter->second.ref_cnt;
-        return dedupIter->second.container_number;
+        return dedupIter->second;
     }
     printf("addRefCnt: did not find\n");
 }
@@ -276,6 +276,14 @@ void MetadataManager::init_arranged(){
     for(auto& x:this->fp_table_base){
         x.second.is_arranged = false;
     }
+}
+
+ContainerKey entry_to_containerKey(const ENTRY_VALUE& entry_value){
+    ContainerKey key = {
+            entry_value.container_type,
+            entry_value.container_number
+        };
+    return key;
 }
 
 

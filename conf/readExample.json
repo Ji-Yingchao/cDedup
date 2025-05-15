@@ -1,15 +1,16 @@
 {
   "Task": "restore",
-  "RestorePath": "/home/jyc/ssd/restore/restore99",
-  "RestoreVersion": 99,
+  "RestorePath": "/home/jyc/ssd/restore/restore1",
+  "RestoreVersion": 1,
   "ChunkingMethod": "cdc",
-  "RestoreMethod": "container",
+  "RestoreMethod": "optimal",
   "containersPath": "/home/jyc/hdd/deltaworking/Containers",
   "fileRecipesPath": "/home/jyc/hdd/deltaworking/metadata/FileRecipes",
   "fingerprintsFilePath": "/home/jyc/hdd/deltaworking/metadata/fingerprints.meta",
   "fingerprintsDeltaDedupFolder": "/home/jyc/hdd/deltaworking/metadata/fingerprintsDeltaDedup",
   "dedupRatioFilePath": "/home/jyc/hdd/deltaworking/metadata/deltaHistoryDR.txt",
   "hotContainersPath": "/home/jyc/hdd/deltaworking/HotContainers",
+  "containerIndexPath": "/home/jyc/hdd/deltaworking/metadata/containerIndex",
   "cache_size": 64,
   "DedupMethod": "manual"
 }

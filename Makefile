@@ -1,10 +1,10 @@
 CC = gcc
 LIB = -lcrypto -lz -lstdc++ -llz4 -lpthread -lstdc++fs
 SRC = main.cpp ./src/fastcdc.cpp\
-	  ./src/MetadataManager.cpp ./src/ContainerCache.cpp ./src/ChunkCache.cpp ./src/IndependentCache.cpp\
+	  ./src/MetadataManager.cpp ./src/container.cpp\
+	  ./src/ContainerCache.cpp ./src/ChunkCache.cpp ./src/IndependentCache.cpp ./src/OptimalCache.cpp\
 	  ./src/deltaDedup_stats.cpp ./src/recipe.cpp ./src/backup_job.cpp ./src/OutputContainer.cpp\
 	  ./src/deltaDedup_gc.cpp\
-	  ./src/container.cpp\
       ./utils/cJSON.c ./utils/metadata.cpp\
 	  ./src/sync_queue.cpp ./src/queue.cpp ./src/jcr.cpp 
 EXE_NAME = cDedup

@@ -21,6 +21,7 @@
 #include "ContainerCache.h"
 #include "ChunkCache.h"
 #include "IndependentCache.h"
+#include "OptimalCache.h"
 #include "general.h"
 #include "FAA.h"
 #include "config.h"
@@ -86,7 +87,9 @@ void do_arrange(int current_version){
     OutputContainer hotContainer(Config::getInstance().getHotContainersPath().c_str(), HOT_CONTAINER, arrange_version);
     OutputContainer coldContainer(Config::getInstance().getContainersPath().c_str(), COLD_CONTAINER, arrange_version);
 
-    SHA1FP fp;  
+    SHA1FP fp; 
+    ContainerKey temp;
+    vector<ContainerKey> refContainers;
     for(auto& x : file_recipe){
         memcpy(&fp, x.data(), sizeof(SHA1FP));
         ENTRY_VALUE& entry = GlobalMetadataManagerPtr->getEntry(fp, ATTR_BASE);
@@ -102,10 +105,39 @@ void do_arrange(int current_version){
             else 
                 coldContainer.writeChunk(ck_data,entry);
         }
+
+        // log container sequence
+        temp = entry_to_containerKey(entry);
+        if (refContainers.empty() || temp != refContainers.back()) {
+            refContainers.push_back(temp);
+        }
     }
 
     //save metadata
-    GlobalMetadataManagerPtr->saveVersion(arrange_version, ATTR_BASE);
+    GlobalMetadataManagerPtr->saveVersion(arrange_version, ATTR_BASE); 
+    saveContainerIndex(refContainers,arrange_version);  
+
+    // update delta container sequence
+    /***
+     * TODO：只记录热容器，冷热容器分离的缓存?
+     * 注意：base之后的所有delta版本都需要更新容器顺序
+     */  
+    ENTRY_VALUE ev;
+    for(int i = current_version; i > arrange_version; i--){
+        refContainers.clear();
+        GlobalMetadataManagerPtr->loadVersion(i,true);
+
+        vector<string> recipe = getFileRecipe(i, Config::getInstance().getFileRecipesPath().c_str());
+        for(auto& x : recipe){
+            memcpy(&fp, x.data(), sizeof(SHA1FP));
+            ev = GlobalMetadataManagerPtr->getEntry(fp);
+            temp = entry_to_containerKey(ev);
+            if (refContainers.empty() || temp != refContainers.back()) {
+                refContainers.push_back(temp);
+            }
+        }
+        saveContainerIndex(refContainers,i);  
+    }
 
     // delete used container
     string path_prefix;
@@ -123,7 +155,6 @@ void do_arrange(int current_version){
         }
     }
     usedContainers.clear();
-    
 }
 
 
@@ -192,13 +223,14 @@ void writeFile(string path){
     unsigned char* file_cache = (unsigned char*)malloc(FILE_CACHE);
     struct SHA1FP sha1_fp;
     vector<string> file_recipe; // 保存这个文件所有块的指纹
-    vector<int> refContainers;
+    vector<ContainerKey> refContainers;
 
     // metadata entry(except FP)
     uint32_t chunk_length = 0;
     uint32_t file_offset = 0;
     uint32_t n_read = 0;
     struct ENTRY_VALUE entry_value;
+    ContainerKey key;
 
     // 重删统计
     uint64_t dedup_chunks = 0;
@@ -293,10 +325,11 @@ void writeFile(string path){
                 }else{
                     GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value, file_attr);
                     
-                    // TODO：log container sequence
-                    // if (refContainers.empty() || container_index != refContainers.back()) {
-                    //     refContainers.push_back(container_index);
-                    // }
+                    // log container sequence
+                    key = entry_to_containerKey(entry_value);
+                    if (refContainers.empty() || key != refContainers.back()) {
+                        refContainers.push_back(key);
+                    }
                 }
 
             }else if(lookup_result == Dedup){
@@ -306,11 +339,12 @@ void writeFile(string path){
                 if(dedupMethod == DEDUP_GLOBAL){
                     GlobalMetadataManagerPtr->addRefCnt(sha1_fp);
                 }else{
-                    int containerId = GlobalMetadataManagerPtr->addRefCntgetContainer(sha1_fp, file_attr);
+                    entry_value = GlobalMetadataManagerPtr->addRefCntgetEntry(sha1_fp, file_attr);
                     
-                    // log container sequence
-                    if (refContainers.empty() || containerId != refContainers.back()) {
-                        refContainers.push_back(containerId);
+                    // log container sequence 
+                    key = entry_to_containerKey(entry_value);
+                    if (refContainers.empty() || key != refContainers.back()) {
+                        refContainers.push_back(key);
                     }
                 }
             }
@@ -348,12 +382,6 @@ void writeFile(string path){
             file_attr = ATTR_SLBASE;
     }
     
-    // save dedup ratio and container index sequence
-    if(dedupMethod != DEDUP_GLOBAL){
-        saveDedupRatio(file_attr,cur_dr);
-        saveContainerIds(refContainers,current_version);
-    }
-    
     // update backup job
     bj.dedup_chunks += dedup_chunks;
     bj.dedup_size += dedup_size;
@@ -362,20 +390,15 @@ void writeFile(string path){
     bj.hash_collision_sum += hash_collision_sum;
     bj.file_num++;
 
-    // GlobalMetadataManagerPtr->loadVersion(0,true); 
-    // GlobalMetadataManagerPtr->printOriginTable();
 
     // save fp-entry metadata
     if(dedupMethod == DEDUP_GLOBAL){
         GlobalMetadataManagerPtr->save();
     }else{
         GlobalMetadataManagerPtr->saveVersion(current_version, file_attr);
-    }
-
-    // GlobalMetadataManagerPtr->loadVersion(0,true); 
-    // GlobalMetadataManagerPtr->printOriginTable();
-
-    if(dedupMethod != DEDUP_GLOBAL){
+        // save dedup ratio and container index sequence
+        saveDedupRatio(file_attr,cur_dr);
+        saveContainerIndex(refContainers,current_version);
         do_delete(current_version);
         do_arrange(current_version);
     }
@@ -488,7 +511,7 @@ int main(int argc, char** argv){
 
         //组装
         RESTORE_METHOD rm = Config::getInstance().getRestoreMethod();
-        if(rm == CONTAINER_CACHE || rm == CHUNK_CACHE || rm == INDENPENDENT_CACHE){
+        if(rm == CONTAINER_CACHE || rm == CHUNK_CACHE || rm == INDENPENDENT_CACHE || rm == OPTIMAL_CACHE){
             // int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT| O_DIRECT, 0777);
             int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT, 0777);
             if(fd < 0){
@@ -505,7 +528,11 @@ int main(int argc, char** argv){
                 cc = new ChunkCache(Config::getInstance().getContainersPath().c_str(), 16*1024);
             }else if(rm == INDENPENDENT_CACHE){
                 cc = new IndependentCache(Config::getInstance().getContainersPath().c_str(), Config::getInstance().getCacheSize(), base_container_max_value);
-            } 
+            }else if(rm == OPTIMAL_CACHE){
+                cc = new OptimalCache(Config::getInstance().getContainersPath().c_str(), Config::getInstance().getCacheSize());
+                vector<ContainerKey> keys = loadContainerIds(restore_version);
+                ((OptimalCache*)cc)->initializeAccessSequence(keys);
+            }
             
 
             SHA1FP fp;
@@ -542,6 +569,9 @@ int main(int argc, char** argv){
             }else if(rm == INDENPENDENT_CACHE){
                 container_read_count = ((IndependentCache*)cc)->getReferenceContainerCount();
                //((IndependentCache*)cc)->printContainers(base_container_max_value);
+            }else if(rm == OPTIMAL_CACHE){
+                container_read_count = ((OptimalCache*)cc)->getReferenceContainerCount();
+               ((OptimalCache*)cc)->printContainers(base_container_max_value);
             }
             
 

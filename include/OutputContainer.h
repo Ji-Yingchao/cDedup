@@ -27,7 +27,6 @@ private:
     uint16_t innerIndex_;
     unsigned char* containerBuf_;
     int version_;
-    //struct ENTRY_VALUE entry_value;
 
     void flush(); // 写满后保存当前容器
     void saveContainer(int container_index, unsigned char* container_buf, unsigned int len, const char* containersPath);

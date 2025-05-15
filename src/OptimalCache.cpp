@@ -1,37 +1,45 @@
-#include "ContainerCache.h"
+#include "OptimalCache.h"
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
 
-string ContainerCache::getChunkData(ENTRY_VALUE ev){
+string OptimalCache::getChunkData(ENTRY_VALUE ev){
     ContainerKey key = {ev.container_type, ev.container_number};
 
-    //this->average_chunks[ev.container_type]++;
+    //刷新future_access_map，当前index与上个版本容器index不一样时erase
+    if(this->previous_index.containerId == -1 || this->previous_index != key){
+        //future_access_map[key].erase(future_access_map[key].begin());
+        auto& vec = future_access_map[key];
+        if (!vec.empty()) {
+            vec.erase(vec.begin()); // 更新未来访问位置
+        }else{
+            printf("当前访问容器索引: %d\n", *vec.begin());
+            exit(-1);
+        }
+        this->previous_index = key;
+    }
 
     auto numberIter = this->container_index_set.find(key);
     if(numberIter != this->container_index_set.end()){
-        //cache hit
+        // cache hit
         return string(cache[key], ev.offset, ev.chunk_length);
-    }else{
-        //cache miss
-        if(container_index_queue.size() >= this->cache_max_size){
-            evictContainerFIFO();
+    } else {
+        // cache miss
+        if(container_index_set.size() >= cache_max_size){
+            evictContainerOptimal(); // 替换为最优策略
         }
-        this->loadContainer(ev.container_number, ev.container_type);
+
+        loadContainer(ev.container_number, ev.container_type);
         return string(cache[key], ev.offset, ev.chunk_length);
     }
 }
 
-void ContainerCache::loadContainer(int container_index, CONTAINER_TYPE container_type){
-    //struct timeval start1, end1,start2, end2;
+
+void OptimalCache::loadContainer(int container_index, CONTAINER_TYPE container_type){
     ContainerKey key = {container_type, container_index};
-    this->container_index_queue.push(key);
-    this->container_index_set.insert(key);
-    
-    //只数容器数量，所以注释
-    string container_path;
-    if(container_type == HOT_CONTAINER) container_path = this->hot_containers_path;
-    else container_path = this->containers_path;
+    container_index_set.insert(key);
+
+    string container_path = (container_type == HOT_CONTAINER) ? hot_containers_path : this->containers_path;
     string container_name = container_path + "/" + container_type_to_string(container_type) + to_string(container_index);
 
     int fd = open(container_name.data(), O_RDONLY | O_DIRECT);
@@ -42,38 +50,67 @@ void ContainerCache::loadContainer(int container_index, CONTAINER_TYPE container
     }
 
     memset(this->container_buf, 0, CONTAINER_SIZE);
-    //gettimeofday(&start2, NULL);
-    int n = read(fd, this->container_buf, CONTAINER_SIZE); // 可能塞不满
-    //gettimeofday(&end2, NULL);
-    //int tmp = (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
-    //this->total_time2 += (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
-
+    int n = read(fd, this->container_buf, CONTAINER_SIZE);
     string content(this->container_buf , n);
-
     this->cache[key] = content;
 
-    // 数容器数量
     this->reference_containers[container_type].push_back(container_index);
+    //printf("%d\n", container_index);
 
     close(fd);
 }
 
-void ContainerCache::evictContainerFIFO(){
-    ContainerKey container_index = this->container_index_queue.front();
-    this->container_index_set.erase(container_index);
-    this->container_index_queue.pop();
 
-    cache.erase(container_index);
+void OptimalCache::evictContainerOptimal() {
+    int latest_use = -1;
+    ContainerKey to_evict;
+    bool found = false;
+
+    for (const auto& key : container_index_set) {
+        auto& future_list = future_access_map[key];
+        if (future_list.empty()) {
+            // 永不再使用，直接淘汰
+            to_evict = key;
+            found = true;
+            break;
+        } else {
+            if (future_list[0] > latest_use) {
+                latest_use = future_list[0];
+                to_evict = key;
+                found = true;
+            }
+        }
+    }
+
+    if (found) {
+        this->container_index_set.erase(to_evict);
+        this->cache.erase(to_evict);
+    } else {
+        // 理论上不应走到这里
+        fprintf(stderr, "No container to evict found!\n");
+        exit(1);
+    }
+}
+
+void OptimalCache::initializeAccessSequence(const vector<ContainerKey>& access_sequence){
+    for (int i = 0; i < access_sequence.size(); ++i) {
+        ContainerKey key = {
+            access_sequence[i].type,
+            access_sequence[i].containerId
+        };
+        this->future_access_map[key].push_back(i);
+    }
 }
 
 
+
 // 统计恢复时的容器数量
-int ContainerCache::getReferenceContainerCount(){
+int OptimalCache::getReferenceContainerCount(){
     int total_count = 0;
     for (const auto& [type, ids] : this->reference_containers) {
         total_count += ids.size();
 
-        //int x= this->average_chunks[type]/ids.size();
+        //int x= this->average_containers[type]/ids.size();
         //printf("%s容器平均chunk数: %d\n", container_type_to_string(type).c_str(),x);
         //printf("%s: %d\n", container_type_to_string(type).c_str(),ids.size());
     }
@@ -81,7 +118,7 @@ int ContainerCache::getReferenceContainerCount(){
 };
 
 // 去除重复的容器
-void ContainerCache::removeDuplicates() {
+void OptimalCache::removeDuplicates() {
     for (auto& [type, ids] : this->reference_containers) {
         unordered_set<int> seen;
         vector<int> unique_ids;
@@ -96,7 +133,7 @@ void ContainerCache::removeDuplicates() {
 }
 
 // 统计base容器和delta容器的个数
-pair<int, int> ContainerCache::countBaseAndDelta(uint64_t threshold) {
+pair<int, int> OptimalCache::countBaseAndDelta(uint64_t threshold) {
     // 小于或等于 threshold 的容器是base
     int count_base = 0, count_delta = 0;
     if (this->reference_containers.find(CONTAINER) != reference_containers.end()){
@@ -116,7 +153,7 @@ pair<int, int> ContainerCache::countBaseAndDelta(uint64_t threshold) {
 }
 
 
-void ContainerCache::printContainers(int base_container_max_value){
+void OptimalCache::printContainers(int base_container_max_value){
     // 读取容器的次数
     int container_read_count = this->getReferenceContainerCount();
     printf("Read Container Count: %d\n", container_read_count);

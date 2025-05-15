@@ -38,3 +38,6 @@ sort -n input.txt -o output.txt
 ## 清除缓存
 sudo echo 3 > /proc/sys/vm/drop_caches
 rm -rf ~/.vscode-server/data/User/History/*
+
+/home/jyc/ssd/dataset/LLVM/llvmorg-12.0.0-rc1.tar
+/home/jyc/ssd/dataset/CHM/chromium_81.0.4044.103.tar

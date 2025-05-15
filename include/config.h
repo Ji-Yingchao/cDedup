@@ -24,6 +24,7 @@ enum RESTORE_METHOD{
     CONTAINER_CACHE,//基于容器的缓冲
     CHUNK_CACHE,    //基于数据块的缓冲
     INDENPENDENT_CACHE,   //基于容器的、Base和Delta分开的缓存
+    OPTIMAL_CACHE,  //在缓存满时淘汰在未来最远被访问的元素。
     FAA_FIXED,      //一次性发送FAA
     FAA_ROLLING,    //FAA环形缓冲区
 };
@@ -327,6 +328,8 @@ class Config{
                 return CHUNK_CACHE;
             }else if (strcmp(s, "independent") == 0){
                 return INDENPENDENT_CACHE;
+            }else if (strcmp(s, "optimal") == 0){
+                return OPTIMAL_CACHE;
             }else if (strcmp(s, "faa_fixed") == 0){
                 return FAA_FIXED;
             }else if (strcmp(s, "faa_rolling") == 0){

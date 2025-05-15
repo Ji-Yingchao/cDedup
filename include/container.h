@@ -4,6 +4,8 @@
 #include <unistd.h>
 #include <string.h>
 #include <sstream>
+#include <vector>
+
 
 /** 容器类型 */
 enum CONTAINER_TYPE{
@@ -12,16 +14,23 @@ enum CONTAINER_TYPE{
     CONTAINER,       //未分类的容器
 };
 
+std::string container_type_to_string(CONTAINER_TYPE type);
 
+CONTAINER_TYPE string_to_container_type(const std::string& str);
+
+
+/** 容器键 */
 struct ContainerKey {
     CONTAINER_TYPE type;
     int containerId;
 
-    //ContainerKey() = default; 
-
     // 重载 ==，unordered_map 需要
     bool operator==(const ContainerKey& other) const {
         return type == other.type && containerId == other.containerId;
+    }
+
+    bool operator!=(const ContainerKey& other) const {
+        return type != other.type || containerId != other.containerId;
     }
 };
 
@@ -31,19 +40,11 @@ struct ContainerKeyHash {
     }
 };
 
-std::string container_type_to_string(CONTAINER_TYPE type);
-CONTAINER_TYPE string_to_container_type(const std::string& str);
+
+
+// log container index sequence
+void saveContainerIndex(std::vector<ContainerKey> refContainers, int current_version);
+
+std::vector<ContainerKey> loadContainerIds(int current_version);
 
 #endif // CONTAINER_H
-
-
-
-// reference_containers是unordered_map，需要hash值
-// namespace std {
-//     template <>
-//     struct hash<CONTAINER_TYPE> {
-//         size_t operator()(const CONTAINER_TYPE& type) const {
-//             return static_cast<size_t>(type);
-//         }
-//     };
-// }

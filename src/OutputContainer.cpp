@@ -47,7 +47,7 @@ void OutputContainer::writeChunk(int chunk_length, int file_offset, unsigned cha
     innerIndex_++;
 }
 
-void OutputContainer::writeChunk(const string& chunk_data, ENTRY_VALUE& value) {
+void OutputContainer::writeChunk(const string& chunk_data, ENTRY_VALUE& entry_value) {
     size_t len = chunk_data.size();
     if (bufPointer_ + len >= CONTAINER_SIZE) {
         flush();
@@ -56,11 +56,11 @@ void OutputContainer::writeChunk(const string& chunk_data, ENTRY_VALUE& value) {
     memcpy(containerBuf_ + bufPointer_, chunk_data.data(), len);
     
     // 更新 ENTRY_VALUE
-    value.container_number = index_;
-    value.offset = innerOffset_;
-    value.container_inner_index = innerIndex_;
-    value.container_type = string_to_container_type(container_type);
-    value.is_arranged = true;
+    entry_value.container_number = index_;
+    entry_value.offset = innerOffset_;
+    entry_value.container_inner_index = innerIndex_;
+    entry_value.container_type = string_to_container_type(container_type);
+    entry_value.is_arranged = true;
     
     bufPointer_ += len;
     innerOffset_ += len;

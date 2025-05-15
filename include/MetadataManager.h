@@ -41,6 +41,8 @@ struct ENTRY_VALUE {
     bool is_arranged;
 };
 
+ContainerKey entry_to_containerKey(const ENTRY_VALUE& entry_value);
+
 // struct TupleHasher {
 //     std::size_t operator()(const SHA1FP &key) const {
 //         return key.fp1;
@@ -81,13 +83,12 @@ class MetadataManager {
         int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value);
         int addNewEntry(const SHA1FP sha1, const ENTRY_VALUE value, FILE_ATTR file_attr);
         int addRefCnt(const SHA1FP sha1);
-        // 增加chunk引用次数，并返回所在containerId
-        int addRefCntgetContainer(const SHA1FP sha1,FILE_ATTR file_attr);
+        // 增加chunk引用次数，并返回引用的ENTRY_VALUE
+        ENTRY_VALUE addRefCntgetEntry(const SHA1FP sha1,FILE_ATTR file_attr);
         ENTRY_VALUE getEntry(const SHA1FP sha1);
         ENTRY_VALUE& getEntry(const SHA1FP sha1, FILE_ATTR file_attr);
         std::string genFPname(int version, FILE_ATTR file_attr);
         void loadDeltaDedupFp(std::string fp_name, bool is_restore);
-        //bool updateEntry(const SHA1FP sha1, const ENTRY_VALUE value);
 
         int getBaseContainerMaxValue();
         void clear_base();

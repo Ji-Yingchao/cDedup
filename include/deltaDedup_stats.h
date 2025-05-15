@@ -36,10 +36,5 @@ vector<AttrWithDR> loadAllDedupRatios();
 pair<int, int> findNearestBaseBefore(const vector<AttrWithDR>& dr_vec,int current_index);
 
 
-// log container index sequence
-void saveContainerIds(vector<int> refContainers, int current_version);
-vector<int> loadContainerIds(int current_version);
-
-
 
 #endif // DEDUP_STATS_H

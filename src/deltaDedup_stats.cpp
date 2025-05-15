@@ -108,6 +108,8 @@ pair<int, int> findNearestBaseBefore(const vector<AttrWithDR>& dr_vec, int curre
 }
 
 
+
+
 vector<FILE_ATTR> loadDeltaAttrs(){
     string deltaConfigFilePath = Config::getInstance().getDeltaConfigFilePath();
     ifstream infile(deltaConfigFilePath);  
@@ -152,45 +154,6 @@ FILE_ATTR string_to_attr(const string& str) {
     exit(-1);
 }
 
-
-void saveContainerIds(vector<int> refContainers, int current_version){
-    string container_index_path = Config::getInstance().getContainerIndexPath();
-    string container_index_name(container_index_path);
-    container_index_name.append("/container");
-    container_index_name.append(to_string(current_version));
-
-    ofstream outFile(container_index_name);
-    if (!outFile) {
-        cerr << "Unable to open file: " << container_index_name << "\n";
-        return;
-    }
-    for (int value : refContainers) {
-        outFile << value << "\n";
-    }
-
-    outFile.close();
-}
-
-vector<int> loadContainerIds(int current_version) {
-    vector<int> refContainers;
-
-    string container_index_path = Config::getInstance().getContainerIndexPath();
-    string container_index_name = container_index_path + "/container" + to_string(current_version);
-
-    ifstream inFile(container_index_name);
-    if (!inFile) {
-        cerr << "Unable to open file: " << container_index_name << "\n";
-        return refContainers; // 返回空 vector
-    }
-
-    int value;
-    while (inFile >> value) {
-        refContainers.push_back(value);
-    }
-
-    inFile.close();
-    return refContainers;
-}
 
 
 // string getDeltaAttr(int target_line){
