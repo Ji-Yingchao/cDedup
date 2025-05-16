@@ -113,32 +113,6 @@ void do_arrange(int current_version){
         }
     }
 
-    //save metadata
-    GlobalMetadataManagerPtr->saveVersion(arrange_version, ATTR_BASE); 
-    saveContainerIndex(refContainers,arrange_version);  
-
-    // update delta container sequence
-    /***
-     * TODO：只记录热容器，冷热容器分离的缓存?
-     * 注意：base之后的所有delta版本都需要更新容器顺序
-     */  
-    ENTRY_VALUE ev;
-    for(int i = current_version; i > arrange_version; i--){
-        refContainers.clear();
-        GlobalMetadataManagerPtr->loadVersion(i,true);
-
-        vector<string> recipe = getFileRecipe(i, Config::getInstance().getFileRecipesPath().c_str());
-        for(auto& x : recipe){
-            memcpy(&fp, x.data(), sizeof(SHA1FP));
-            ev = GlobalMetadataManagerPtr->getEntry(fp);
-            temp = entry_to_containerKey(ev);
-            if (refContainers.empty() || temp != refContainers.back()) {
-                refContainers.push_back(temp);
-            }
-        }
-        saveContainerIndex(refContainers,i);  
-    }
-
     // delete used container
     string path_prefix;
     string path;
@@ -155,6 +129,39 @@ void do_arrange(int current_version){
         }
     }
     usedContainers.clear();
+
+    //save metadata
+    GlobalMetadataManagerPtr->saveVersion(arrange_version, ATTR_BASE); 
+    saveContainerIndex(refContainers,arrange_version);  
+
+    // update delta container sequence
+    /***
+     * TODO：只记录热容器，冷热容器分离的缓存?
+     * 注意：base之后的所有delta版本都需要更新容器顺序
+     */  
+    ENTRY_VALUE ev;
+    // string fp_name = GlobalMetadataManagerPtr->genFPname(arrange_version,ATTR_BASE);
+    // GlobalMetadataManagerPtr->loadDeltaDedupFp(fp_name,true);
+    for(int i = current_version; i > arrange_version; i--){
+        refContainers.clear();
+        GlobalMetadataManagerPtr->clear_delta_table();
+
+        //load delta version fp
+        string fp_name = GlobalMetadataManagerPtr->genFPname(i,ATTR_DELTA);
+        GlobalMetadataManagerPtr->loadDeltaDedupFp(fp_name,true);
+        //GlobalMetadataManagerPtr->loadVersion(i,true);
+
+        vector<string> recipe = getFileRecipe(i, Config::getInstance().getFileRecipesPath().c_str());
+        for(auto& x : recipe){
+            memcpy(&fp, x.data(), sizeof(SHA1FP));
+            ev = GlobalMetadataManagerPtr->getEntry(fp,ATTR_DELTA);
+            temp = entry_to_containerKey(ev);
+            if (refContainers.empty() || temp != refContainers.back()) {
+                refContainers.push_back(temp);
+            }
+        }
+        saveContainerIndex(refContainers,i);  
+    }  
 }
 
 

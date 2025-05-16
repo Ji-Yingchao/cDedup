@@ -109,6 +109,12 @@ void MetadataManager::loadDeltaDedupFp(std::string fp_name, bool is_restore){
         memcpy(&tmp_fp, metadata_cache+i*meta_size, sizeof(SHA1FP));
         memcpy(&tmp_value, metadata_cache+i*meta_size + sizeof(SHA1FP), sizeof(ENTRY_VALUE));
 
+        //不通过loadVersion访问loadDeltaDedupFp
+        if(this->base_version == -1){ 
+            this->fp_table_delta.emplace(tmp_fp, tmp_value);
+            continue;
+        }
+
         if(is_restore){
             // 找到base容器的最大值
             if(this->base_container_max_value==0 && tmp_value.container_number > tmp_base_container_index){
@@ -261,7 +267,19 @@ ENTRY_VALUE MetadataManager::getEntry(const SHA1FP sha1){
 }
 
 ENTRY_VALUE& MetadataManager::getEntry(const SHA1FP sha1, FILE_ATTR file_attr){
-    return this->fp_table_base[sha1];
+    if(file_attr != ATTR_BASE){
+        auto dedupIter = this->fp_table_delta.find(sha1);
+        if(dedupIter != this->fp_table_delta.end()){
+            return dedupIter->second;
+        } 
+    }
+    auto dedupIter = this->fp_table_base.find(sha1);
+    if(dedupIter != this->fp_table_base.end()){
+        return dedupIter->second;
+    }
+    printf("addRefCnt: did not find\n");
+    exit(-1);
+    //return this->fp_table_base[sha1];
 }
 
 int MetadataManager::getBaseContainerMaxValue(){
@@ -269,13 +287,18 @@ int MetadataManager::getBaseContainerMaxValue(){
 }
 
 void MetadataManager::clear_base(){
-    fp_table_base.clear(); 
+    this->fp_table_base.clear(); 
 }
 
 void MetadataManager::init_arranged(){
     for(auto& x:this->fp_table_base){
         x.second.is_arranged = false;
     }
+}
+
+void MetadataManager::clear_delta_table(){
+    this->base_version = -1;
+    this->fp_table_delta.clear(); 
 }
 
 ContainerKey entry_to_containerKey(const ENTRY_VALUE& entry_value){

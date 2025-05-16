@@ -68,6 +68,9 @@ class MetadataManager {
     public:
         MetadataManager(const std::string& file_path) {
             this->metadata_file_path = file_path;
+
+            this->base_container_max_value = 0;
+            this->base_version = 0;
         }
 
         int save();
@@ -93,6 +96,7 @@ class MetadataManager {
         int getBaseContainerMaxValue();
         void clear_base();
         void init_arranged();
+        void clear_delta_table();  //do_arrange和base cache结合时需要
 
         void printOriginTable();
         void printFPRefCnt();
@@ -100,7 +104,7 @@ class MetadataManager {
 
     private:
         //为了判断delta容器和container容器，识别出base容器的最大值
-        int base_container_max_value = 0;
+        int base_container_max_value;
         int base_version;
 
         std::string metadata_file_path;

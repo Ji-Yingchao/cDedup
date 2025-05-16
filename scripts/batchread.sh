@@ -3,7 +3,7 @@
 
 # 恢复，一次测
 # folder_path="/home/jyc/ssd/restore/restore"
-# for i in {0..99};
+# for i in {0..4};
 # do
 #     full_path=$folder_path$i
 #     jq --arg full_path "$full_path" '.RestorePath = $full_path' ../conf/readExample.json > ../conf/temp.json
