@@ -44,7 +44,7 @@ class OptimalCache : public Cache{
 
         string hot_containers_path;
 
-        void loadContainer(int container_number, CONTAINER_TYPE container_type);
+        void loadContainer(uint32_t container_number, CONTAINER_TYPE container_type);
         void evictContainerOptimal();
 
         // 恢复时引用的容器

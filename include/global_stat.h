@@ -59,6 +59,9 @@ public:
         printf("Init Logical Size %" PRIu64 "\n", GlobalStat::getInstance().getLogicalSize());
         printf("Init Physical Size %" PRIu64 "\n", GlobalStat::getInstance().getPhysicalSize());
         printf("Init DR %.2f\n", GlobalStat::getInstance().getDR());
+
+        bj.sum_size = this->logical_size;
+        bj.dedup_size = this->logical_size - this->physical_size; //bj中只有这两个变量记录了下来
     }
 
     void save_arguments(char * json_path)
@@ -103,8 +106,8 @@ public:
     }
 
     void update(uint64_t backup_logical_size, uint64_t backup_physical_size){
-        this->logical_size += backup_logical_size;
-        this->physical_size += backup_physical_size;
+        this->logical_size = backup_logical_size;
+        this->physical_size = backup_physical_size;
 
         this->DR = 1 - (double)this->physical_size / (double)this->logical_size;
     }

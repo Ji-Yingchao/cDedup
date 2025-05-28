@@ -1,9 +1,9 @@
 {
   "Task": "restore",
-  "RestorePath": "/home/jyc/ssd/restore/restore99",
-  "RestoreVersion": 99,
+  "RestorePath": "/home/jyc/ssd/restore/restore0",
+  "RestoreVersion": 0,
   "ChunkingMethod": "cdc",
-  "RestoreMethod": "optimal",
+  "RestoreMethod": "container",
   "containersPath": "/home/jyc/hdd/deltaworking/Containers",
   "fileRecipesPath": "/home/jyc/hdd/deltaworking/metadata/FileRecipes",
   "fingerprintsFilePath": "/home/jyc/hdd/deltaworking/metadata/fingerprints.meta",

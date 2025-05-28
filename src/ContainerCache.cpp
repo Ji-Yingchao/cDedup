@@ -22,7 +22,7 @@ string ContainerCache::getChunkData(ENTRY_VALUE ev){
     }
 }
 
-void ContainerCache::loadContainer(int container_index, CONTAINER_TYPE container_type){
+void ContainerCache::loadContainer(uint32_t container_index, CONTAINER_TYPE container_type){
     //struct timeval start1, end1,start2, end2;
     ContainerKey key = {container_type, container_index};
     this->container_index_queue.push(key);
@@ -45,12 +45,13 @@ void ContainerCache::loadContainer(int container_index, CONTAINER_TYPE container
     //gettimeofday(&start2, NULL);
     int n = read(fd, this->container_buf, CONTAINER_SIZE); // 可能塞不满
     //gettimeofday(&end2, NULL);
-    //int tmp = (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
+    //double tmp = (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
     //this->total_time2 += (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
 
     string content(this->container_buf , n);
 
     this->cache[key] = content;
+    this->load_container_size += n;
 
     // 数容器数量
     this->reference_containers[container_type].push_back(container_index);
@@ -79,6 +80,10 @@ int ContainerCache::getReferenceContainerCount(){
     }
     return total_count;
 };
+
+uint64_t ContainerCache::getLoadContainerSize(){
+    return this->load_container_size;
+}
 
 // 去除重复的容器
 void ContainerCache::removeDuplicates() {
@@ -119,7 +124,7 @@ pair<int, int> ContainerCache::countBaseAndDelta(uint64_t threshold) {
 void ContainerCache::printContainers(int base_container_max_value){
     // 读取容器的次数
     int container_read_count = this->getReferenceContainerCount();
-    printf("Read Container Count: %d\n", container_read_count);
+    printf("Read Container Count: %d\n", container_read_count);  //即Seek Number
     // auto [base_counter, delta_container] = this->countBaseAndDelta(base_container_max_value);
     // printf("Read Base Container Count: %d\n", base_counter);
     // printf("Read Delta Container Count: %d\n", delta_container);

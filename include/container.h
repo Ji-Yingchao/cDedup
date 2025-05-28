@@ -22,7 +22,7 @@ CONTAINER_TYPE string_to_container_type(const std::string& str);
 /** 容器键 */
 struct ContainerKey {
     CONTAINER_TYPE type;
-    int containerId;
+    uint32_t containerId;
 
     // 重载 ==，unordered_map 需要
     bool operator==(const ContainerKey& other) const {

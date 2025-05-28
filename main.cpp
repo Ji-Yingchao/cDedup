@@ -59,6 +59,9 @@ void flushAssemblingBuffer(int fd, unsigned char* buf, int len){
 
 void do_arrange(int current_version){
     if(!Config::getInstance().getArranged() || current_version < 1) return ;
+
+    struct timeval arrange_time_start, arrange_time_end;  
+    gettimeofday(&arrange_time_start, NULL);
     
     // 根据历史记录查找之前的base
     vector<AttrWithDR> dr_vec = loadAllDedupRatios();
@@ -79,7 +82,7 @@ void do_arrange(int current_version){
     //     arrange_version = base_version;
     // }
     
-    printf("-------------Begin to arrange file version %d-----------\n",arrange_version);
+    printf("-----------------------Begin to arrange file version %d-----------------------\n",arrange_version);
     GlobalMetadataManagerPtr->init_arranged();
     unordered_set<ContainerKey, ContainerKeyHash> usedContainers;
     vector<string> file_recipe = getFileRecipe(arrange_version, Config::getInstance().getFileRecipesPath().c_str());
@@ -95,8 +98,8 @@ void do_arrange(int current_version){
         ENTRY_VALUE& entry = GlobalMetadataManagerPtr->getEntry(fp, ATTR_BASE);
 
         if (!entry.is_arranged){
-            ContainerKey key = {entry.container_type, entry.container_number};
-            usedContainers.insert(key);
+            temp = {entry.container_type, entry.container_number};
+            usedContainers.insert(temp);
 
             // write to new container and update metadata
             string ck_data = cc->getChunkData(entry);
@@ -107,9 +110,11 @@ void do_arrange(int current_version){
         }
 
         // log container sequence
-        temp = entry_to_containerKey(entry);
-        if (refContainers.empty() || temp != refContainers.back()) {
-            refContainers.push_back(temp);
+        if(Config::getInstance().getRestoreMethod() == OPTIMAL_CACHE){
+            temp = entry_to_containerKey(entry);
+            if (refContainers.empty() || temp != refContainers.back()) {
+                refContainers.push_back(temp);
+            }
         }
     }
 
@@ -134,22 +139,30 @@ void do_arrange(int current_version){
     GlobalMetadataManagerPtr->saveVersion(arrange_version, ATTR_BASE); 
     saveContainerIndex(refContainers,arrange_version);  
 
+    gettimeofday(&arrange_time_end, NULL);
+    uint64_t single_arrange_time_us = (arrange_time_end.tv_sec - arrange_time_start.tv_sec) * 1000000 + 
+                                         arrange_time_end.tv_usec - arrange_time_start.tv_usec;
+    
+    printf("Arrange Time: %.6f\n", ((float)(single_arrange_time_us)/1000000));
+
     // update delta container sequence
     /***
      * TODO：只记录热容器，冷热容器分离的缓存?
      * 注意：base之后的所有delta版本都需要更新容器顺序
      */  
+    if(Config::getInstance().getRestoreMethod() != OPTIMAL_CACHE) return;
     ENTRY_VALUE ev;
-    // string fp_name = GlobalMetadataManagerPtr->genFPname(arrange_version,ATTR_BASE);
-    // GlobalMetadataManagerPtr->loadDeltaDedupFp(fp_name,true);
     for(int i = current_version; i > arrange_version; i--){
         refContainers.clear();
         GlobalMetadataManagerPtr->clear_delta_table();
 
         //load delta version fp
         string fp_name = GlobalMetadataManagerPtr->genFPname(i,ATTR_DELTA);
+        if (!fs::exists(fp_name)) {
+            cerr << "Error: Input path does not exist." << endl;
+            continue;   //不存在可能是delta版本已回收
+        }
         GlobalMetadataManagerPtr->loadDeltaDedupFp(fp_name,true);
-        //GlobalMetadataManagerPtr->loadVersion(i,true);
 
         vector<string> recipe = getFileRecipe(i, Config::getInstance().getFileRecipesPath().c_str());
         for(auto& x : recipe){
@@ -249,8 +262,6 @@ void writeFile(string path){
     // delta重删
     DEDUP_METHOD dedupMethod = Config::getInstance().getDedupMethod();
     uint32_t current_version = getVersion(Config::getInstance().getFileRecipesPath().c_str(), "recipe");
-    // uint32_t max_destination_base = min_destination_base + base_size - 1;
-    
     FILE_ATTR file_attr = ATTR_BASE;
     if(dedupMethod == DEDUP_INTERVAL){
         uint32_t base_size = Config::getInstance().getBaseSize();
@@ -325,7 +336,7 @@ void writeFile(string path){
             // Write
             if(lookup_result == Unique){
                 // save chunk itself and metadata
-                outContainer.writeChunk(chunk_length, file_offset, file_cache, entry_value);
+                outContainer.writeChunk(chunk_length, file_offset, file_cache, entry_value, (void*)&sha1_fp);
 
                 if(dedupMethod == DEDUP_GLOBAL){
                     GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value);
@@ -333,9 +344,11 @@ void writeFile(string path){
                     GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value, file_attr);
                     
                     // log container sequence
-                    key = entry_to_containerKey(entry_value);
-                    if (refContainers.empty() || key != refContainers.back()) {
-                        refContainers.push_back(key);
+                    if(Config::getInstance().getRestoreMethod() == OPTIMAL_CACHE){
+                        key = entry_to_containerKey(entry_value);
+                        if (refContainers.empty() || key != refContainers.back()) {
+                            refContainers.push_back(key);
+                        }
                     }
                 }
 
@@ -349,9 +362,11 @@ void writeFile(string path){
                     entry_value = GlobalMetadataManagerPtr->addRefCntgetEntry(sha1_fp, file_attr);
                     
                     // log container sequence 
-                    key = entry_to_containerKey(entry_value);
-                    if (refContainers.empty() || key != refContainers.back()) {
-                        refContainers.push_back(key);
+                    if(Config::getInstance().getRestoreMethod() == OPTIMAL_CACHE){
+                        key = entry_to_containerKey(entry_value);
+                        if (refContainers.empty() || key != refContainers.back()) {
+                            refContainers.push_back(key);
+                        }
                     }
                 }
             }
@@ -375,7 +390,7 @@ void writeFile(string path){
                                          backup_time_end.tv_usec - backup_time_start.tv_usec;
     
     float throughput = (float)(sum_size) / MB / ((float)(single_dedup_time_us)/1000000);
-    printf("throughput(MB/s): %.2f\n",    throughput);
+    printf("backup throughput(MB/s): %.2f\n",    throughput);
     
     double cur_dr = double(dedup_size) / double(sum_size);
     //printf("dedup ratio %.2f% \n",     double(dedup_size) / double(sum_size) *100);
@@ -401,13 +416,14 @@ void writeFile(string path){
     // save fp-entry metadata
     if(dedupMethod == DEDUP_GLOBAL){
         GlobalMetadataManagerPtr->save();
+        do_delete(current_version);
     }else{
         GlobalMetadataManagerPtr->saveVersion(current_version, file_attr);
         // save dedup ratio and container index sequence
         saveDedupRatio(file_attr,cur_dr);
         saveContainerIndex(refContainers,current_version);
-        do_delete(current_version);
         do_arrange(current_version);
+        do_delete(current_version);
     }
     
     // free 
@@ -452,7 +468,6 @@ int main(int argc, char** argv){
         initChunkingAlgorithm();
 
         string input_path = Config::getInstance().getInputPath();
-
         if (!fs::exists(input_path)) {
             cerr << "Error: Input path does not exist." << endl;
             return 1;
@@ -474,15 +489,16 @@ int main(int argc, char** argv){
                                          backup_time_end.tv_usec - backup_time_start.tv_usec;
         float throughput = (float)(bj.sum_size) / MB / ((float)(single_dedup_time_us)/1000000);
 
-        // 写文件 - 重删统计
+        // 写文件 - 重删统计 bj记录当前任务数据
         //print_backup_job(bj);
         printf("-----------------------statics----------------------\n");
-        printf("Throughput %.2f MiB/s\n",    throughput);
+        printf("Throughput %.2f MiB/s\n",    throughput); 
         //printf("Dedup Ratio %.2f%\n",     double(bj.dedup_size) / double(bj.sum_size) *100);
 
         // 保存全局信息
         GlobalStat::getInstance().update(bj.sum_size, bj.sum_size - bj.dedup_size);
         GlobalStat::getInstance().save_arguments(global_stat_path);
+        printf("Actual DR %.4f \n", double(bj.sum_size) / double(bj.sum_size - bj.dedup_size) );
 
     }
     else if(Config::getInstance().getTaskType() == TASK_RESTORE){
@@ -511,6 +527,7 @@ int main(int argc, char** argv){
         memset(assembling_buffer, 0, FILE_CACHE);
         int write_buffer_offset = 0;
         uint64_t restored_size = 0;
+        uint64_t load_container_size = 0;
         int container_read_count = 0;
 
         //recipe
@@ -573,6 +590,7 @@ int main(int argc, char** argv){
             if(rm == CONTAINER_CACHE){
                 container_read_count = ((ContainerCache*)cc)->getReferenceContainerCount();
                ((ContainerCache*)cc)->printContainers(base_container_max_value);
+               load_container_size = ((ContainerCache*)cc)->getLoadContainerSize();
             }else if(rm == INDENPENDENT_CACHE){
                 container_read_count = ((IndependentCache*)cc)->getReferenceContainerCount();
                //((IndependentCache*)cc)->printContainers(base_container_max_value);
@@ -658,11 +676,13 @@ int main(int argc, char** argv){
         uint64_t single_dedup_time_us = (restore_time_end.tv_sec - restore_time_start.tv_sec) * 1000000 + restore_time_end.tv_usec - restore_time_start.tv_usec;
         float restore_throughput = (float)(restored_size) / MB / ((float)(single_dedup_time_us)/1000000);
         float speed_factor = (float)(restored_size) / MB / ((float)container_read_count);
+        float read_amplification = ((float)load_container_size) / (float)(restored_size);
         printf("RestoreTime: %.6f\n",    ((float)(single_dedup_time_us)/1000000));
         printf("-----------------------Restore statics----------------------\n");
         printf("Restore size %" PRIu64 "\n",    restored_size);
         printf("Restore Throughput %.2f MiB/s\n", restore_throughput);
         printf("Speed factor %.2f\n", speed_factor);
+        printf("Read Amplification %.2f\n", read_amplification);
         
         
     }else if(Config::getInstance().getTaskType() == TASK_DELETE){

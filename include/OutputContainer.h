@@ -13,7 +13,7 @@ public:
     ~OutputContainer();
 
     // 写入 chunk：从缓存中复制一段
-    void writeChunk(int chunk_length, int file_offset, unsigned char* file_cache, ENTRY_VALUE& value);
+    void writeChunk(int chunk_length, int file_offset, unsigned char* file_cache, ENTRY_VALUE& value, void* SHA_buf);
 
     // 重载：直接写入 string
     void writeChunk(const string& chunk_data, ENTRY_VALUE& value);
@@ -27,6 +27,9 @@ private:
     uint16_t innerIndex_;
     unsigned char* containerBuf_;
     int version_;
+
+    unsigned char* rev_container_buf;
+    uint32_t rev_container_cnt;
 
     void flush(); // 写满后保存当前容器
     void saveContainer(int container_index, unsigned char* container_buf, unsigned int len, const char* containersPath);

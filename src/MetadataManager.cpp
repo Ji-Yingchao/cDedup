@@ -86,10 +86,11 @@ int MetadataManager::loadVersion(int version, bool is_restore){
             loadDeltaDedupFp(fp_name,is_restore);
         }
     }
+    return 0;
 }
 
 void MetadataManager::loadDeltaDedupFp(std::string fp_name, bool is_restore){
-    printf("-----------------------Loading FP-index DeltaDedup-----------------------\n");
+    printf("-----------Loading FP-index DeltaDedup-----------\n");
     printf("Loading index: %s\n", fp_name.c_str());
 
     unsigned char* metadata_cache = (unsigned char*)malloc(FILE_CACHE);
@@ -160,6 +161,7 @@ int MetadataManager::load(){
     close(fd);
     free(metadata_cache);
     printf("metadata table load %d items\n", entry_count);
+    return 0;
 }
 
 int MetadataManager::save(){
@@ -189,6 +191,7 @@ int MetadataManager::save(){
     printf("total item %d\n", count);
 
     close(fd);
+    return 0;
 }
 
 
@@ -260,6 +263,7 @@ int MetadataManager::addRefCnt(const SHA1FP sha1){
         return ++dedupIter->second.ref_cnt;
     }
     printf("addRefCnt: did not find\n");
+    return 0;
 }
 
 ENTRY_VALUE MetadataManager::getEntry(const SHA1FP sha1){
@@ -280,6 +284,38 @@ ENTRY_VALUE& MetadataManager::getEntry(const SHA1FP sha1, FILE_ATTR file_attr){
     printf("addRefCnt: did not find\n");
     exit(-1);
     //return this->fp_table_base[sha1];
+}
+
+int MetadataManager::decRefCnt(const SHA1FP sha1){
+    auto dedupIter = this->fp_table_origin.find(sha1);
+    if(dedupIter != this->fp_table_origin.end()){
+        if(dedupIter->second.ref_cnt > 1)
+            return --dedupIter->second.ref_cnt;
+        else{
+            fp_table_origin.erase(dedupIter);
+            return 0;
+        }
+    }
+    printf("decRefCnt: did not find\n");
+    exit(-1);
+}
+
+int MetadataManager::chunkOffsetDec(SHA1FP sha1, int oft, int len){
+    auto dedupIter = this->fp_table_origin.find(sha1);
+    if(dedupIter != this->fp_table_origin.end()){
+        if(dedupIter->second.offset > oft)
+            dedupIter->second.offset -= len;
+        return 0;
+    }
+    //printf("fp_table_added: %ld\n",this->fp_table_added.size());
+    dedupIter = this->fp_table_added.find(sha1);
+    if(dedupIter != this->fp_table_added.end()){
+        if(dedupIter->second.offset > oft)
+            dedupIter->second.offset -= len;
+        return 0;
+    }
+    printf("MetadataManager::chunkOffsetDec error\n");
+    exit(-1);
 }
 
 int MetadataManager::getBaseContainerMaxValue(){

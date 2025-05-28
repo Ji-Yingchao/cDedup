@@ -21,6 +21,7 @@ CONTAINER_TYPE string_to_container_type(const std::string& str) {
 }
 
 void saveContainerIndex(std::vector<ContainerKey> refContainers, int current_version){
+    if(refContainers.empty()) return ;
     std::string container_index_path = Config::getInstance().getContainerIndexPath();
     std::string container_index_name(container_index_path);
     container_index_name.append("/container");

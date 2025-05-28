@@ -92,6 +92,8 @@ class MetadataManager {
         ENTRY_VALUE& getEntry(const SHA1FP sha1, FILE_ATTR file_attr);
         std::string genFPname(int version, FILE_ATTR file_attr);
         void loadDeltaDedupFp(std::string fp_name, bool is_restore);
+        int decRefCnt(const SHA1FP sha1);
+        int chunkOffsetDec(SHA1FP sha1, int oft, int len);
 
         int getBaseContainerMaxValue();
         void clear_base();

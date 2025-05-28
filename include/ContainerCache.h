@@ -17,6 +17,7 @@ class ContainerCache : public Cache{
             posix_memalign((void**)&this->container_buf, SECTOR_SIZE, CONTAINER_SIZE);
 
             this->hot_containers_path = Config::getInstance().getHotContainersPath();
+            this->load_container_size = 0;
         }
 
         ~ContainerCache(){
@@ -26,6 +27,7 @@ class ContainerCache : public Cache{
         virtual string getChunkData(ENTRY_VALUE ev);
 
         int getReferenceContainerCount();
+        uint64_t getLoadContainerSize();
 
         void printContainers(int base_container_max_value);
 
@@ -39,12 +41,13 @@ class ContainerCache : public Cache{
 
         string hot_containers_path;
 
-        void loadContainer(int container_number, CONTAINER_TYPE container_type);
+        void loadContainer(uint32_t container_number, CONTAINER_TYPE container_type);
         void evictContainerFIFO();
 
         // 恢复时引用的容器
         unordered_map<CONTAINER_TYPE, vector<int>> reference_containers; 
-        unordered_map<CONTAINER_TYPE, int>  average_chunks;  
+        unordered_map<CONTAINER_TYPE, int>  average_chunks;
+        uint64_t load_container_size;  
 
         void removeDuplicates();
         pair<int, int> countBaseAndDelta(uint64_t threshold);

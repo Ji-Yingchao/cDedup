@@ -35,7 +35,7 @@ string OptimalCache::getChunkData(ENTRY_VALUE ev){
 }
 
 
-void OptimalCache::loadContainer(int container_index, CONTAINER_TYPE container_type){
+void OptimalCache::loadContainer(uint32_t container_index, CONTAINER_TYPE container_type){
     ContainerKey key = {container_type, container_index};
     container_index_set.insert(key);
 
