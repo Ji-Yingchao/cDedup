@@ -5,6 +5,9 @@
 #define JCR_STATUS_RUNNING 2
 #define JCR_STATUS_DONE 3
 
+#include <cstdint>
+#include <pthread.h>
+
 /* job control record */
 struct jcr{
 	int id;
@@ -15,8 +18,8 @@ struct jcr{
 
     int status;
 
-	int data_size;
-	int unique_data_size;
+	int64_t data_size;
+	int64_t unique_data_size;
 	int chunk_num;
 	int unique_chunk_num;
 	int total_container_num;
@@ -42,6 +45,8 @@ struct jcr{
 };
 
 extern struct jcr jcr;
+
+extern pthread_mutex_t jcr_status_mutex;
 
 void init_jcr();
 void init_backup_jcr();

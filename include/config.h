@@ -231,6 +231,7 @@ class Config{
                     Config::getInstance().setArranged(valuestring);
                 }
             }
+            cJSON_Delete(config);
         }
 
     private:

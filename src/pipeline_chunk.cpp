@@ -2,6 +2,7 @@
 #include "config.h"
 #include "pipeline.h"
 #include "fastcdc.h"
+#include "jcr.h"
 
 static pthread_t chunk_t;
 static int64_t chunk_num;
@@ -58,13 +59,19 @@ static void* chunk_thread(void *arg) {
 				break;
 			}
 
+			TIMER_DECLARE(1);
+			TIMER_BEGIN(1);
+
             int	chunk_size = chunking(block_buf + buf_off, rest_size);
+
+			TIMER_END(1, jcr.chunk_time);
 
             struct chunk *nc = new_chunk(chunk_size);
 			memcpy(nc->data, block_buf + buf_off, chunk_size);
 			rest_size -= chunk_size;
 			buf_off += chunk_size;
-
+			
+			chunk_num++;
             sync_queue_push(chunk_queue, nc);
 		}
 
@@ -91,7 +98,7 @@ void chunking_method_prepare(){
         }
 
 	}else if(Config::getInstance().getChunkingMethod() == CDC){
-		printf("Deploying FastCDC chunking method\n");
+		//printf("Deploying FastCDC chunking method\n");
 		chunking = FastCDC_with_NC;
         fastCDC_init(Config::getInstance().getAvgChunkSize(), Config::getInstance().getNormalLevel());
 		
@@ -102,12 +109,15 @@ void chunking_method_prepare(){
 }
 
 void start_chunk_phase() {
+	chunk_num = 0;
     chunking_method_prepare();
 	chunk_queue = sync_queue_new(200);
+	printf("Chunk Phase Start\n");
 	pthread_create(&chunk_t, NULL, chunk_thread, NULL);
 }
 
 void stop_chunk_phase() {
 	pthread_join(chunk_t, NULL);
     printf("Chunk Phase Over\n");
+	printf("Chunking num：%ld\n",chunk_num);
 }

@@ -501,6 +501,49 @@ int main(int argc, char** argv){
         printf("Actual DR %.4f \n", double(bj.sum_size) / double(bj.sum_size - bj.dedup_size) );
 
     }
+    else if(Config::getInstance().getTaskType() == TASK_WRITE_PIPELINE){
+        init_backup_jcr();
+
+        
+
+        struct timeval backup_time_start, backup_time_end;  
+        gettimeofday(&backup_time_start, NULL);
+        
+
+        start_read_phase();
+        start_chunk_phase();
+        start_hash_phase();
+        start_dedup_phase();
+        // do{
+        //     sleep(1);
+        // }while(jcr.status == JCR_STATUS_RUNNING || jcr.status != JCR_STATUS_DONE);
+        do{
+            pthread_mutex_lock(&jcr_status_mutex);
+            int status = jcr.status;
+            pthread_mutex_unlock(&jcr_status_mutex);
+
+            if (status != JCR_STATUS_RUNNING)
+                break;
+
+            sleep(1);
+        }while(true);
+
+        stop_read_phase();
+        stop_chunk_phase();
+        stop_hash_phase();
+        stop_dedup_phase();
+
+        gettimeofday(&backup_time_end, NULL);
+        jcr.total_time = (backup_time_end.tv_sec - backup_time_start.tv_sec) * 1000000 + 
+                                          backup_time_end.tv_usec - backup_time_start.tv_usec;
+        // printf("throughput(MB/s): %.2f\n",
+		// 	(double) jcr.data_size * 1000000 / (1024 * 1024 * jcr.total_time));
+        show_backup_jcr();
+
+        //保留固定的版本数量
+        uint32_t current_version = getVersion(Config::getInstance().getFileRecipesPath().c_str(), "recipe");
+        do_delete(current_version);
+    }
     else if(Config::getInstance().getTaskType() == TASK_RESTORE){
         // 如果写时使用DeltaDedup，那么恢复时参数也需要指定DeltaDedup
         int restore_version = Config::getInstance().getRestoreVersion();

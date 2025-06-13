@@ -53,6 +53,7 @@ public:
                 GlobalStat::getInstance().setDR(val_dol);
             }
         }
+        cJSON_Delete(config);
 
         //show
         printf("-------Parsing Old Global Arguments-------\n");

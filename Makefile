@@ -6,11 +6,12 @@ SRC = main.cpp ./src/fastcdc.cpp\
 	  ./src/deltaDedup_stats.cpp ./src/recipe.cpp ./src/backup_job.cpp ./src/OutputContainer.cpp\
 	  ./src/deltaDedup_gc.cpp\
       ./utils/cJSON.c ./utils/metadata.cpp\
-	  ./src/sync_queue.cpp ./src/queue.cpp ./src/jcr.cpp 
+	  ./src/sync_queue.cpp ./src/queue.cpp ./src/jcr.cpp\
+	  ./src/pipeline.cpp ./src/pipeline_read.cpp ./src/pipeline_chunk.cpp ./src/pipeline_hash.cpp ./src/pipeline_dedup.cpp ./src/pipeline_restore.cpp 
 EXE_NAME = cDedup
 
 amazing:
-	$(CC) -std=c++17 $(SRC) $(LIB) -o $(EXE_NAME) -g -O0 -I./include -I./utils -I./utils/lz4-1.9.1/lib -L./utils/lz4-1.9.1/lib
+	$(CC) -std=c++17 $(SRC) $(LIB) -o $(EXE_NAME) -g -O2 -I./include -I./utils -I./utils/lz4-1.9.1/lib -L./utils/lz4-1.9.1/lib
 
 clean:
 	rm $(EXE_NAME) \
@@ -20,3 +21,4 @@ clean:
 
 #   ./src/pipeline.cpp ./src/pipeline_read.cpp ./src/pipeline_chunk.cpp ./src/pipeline_hash.cpp ./src/pipeline_dedup.cpp ./src/pipeline_restore.cpp\
 #   ./src/compressor.cpp ./src/full_file_deduplicater.cpp ./src/merkle_tree.cpp\
+#   -Wall -Wextra -fsanitize=address -fsanitize=thread

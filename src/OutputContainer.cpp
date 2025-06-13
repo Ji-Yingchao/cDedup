@@ -101,6 +101,13 @@ void OutputContainer::saveContainer(int container_index, unsigned char* containe
         exit(-1);
     }
 
+    // 确保数据真正落盘
+    // if (fsync(fd) == -1) {
+    //     printf("fsync error: %s\n", strerror(errno));
+    //     close(fd);
+    //     exit(-1);
+    // }
+
     close(fd);
 
     if(Config::getInstance().getDedupMethod() == DEDUP_GLOBAL){
@@ -111,29 +118,5 @@ void OutputContainer::saveContainer(int container_index, unsigned char* containe
         write(fd, rev_container_buf, rev_container_cnt * sizeof(SHA1FP));
         close(fd);
 
-        // 写入阶段
-        // ssize_t bytes_written, bytes_read;
-        // size_t total_size = rev_container_cnt * sizeof(SHA1FP);
-        // fd = open(container_name.data(), O_WRONLY | O_CREAT | O_TRUNC, 0777);
-        // if (fd < 0) {
-        //     perror("open for write failed");
-        //     exit(EXIT_FAILURE);
-        // }
-
-        // bytes_written = write(fd, &rev_container_cnt, sizeof(uint32_t));
-        // if (bytes_written != sizeof(uint32_t)) {
-        //     perror("write rev_container_cnt failed");
-        //     close(fd);
-        //     exit(EXIT_FAILURE);
-        // }
-
-        // bytes_written = write(fd, rev_container_buf, total_size);
-        // if (bytes_written != (ssize_t)total_size) {
-        //     perror("write rev_container_buf failed");
-        //     close(fd);
-        //     exit(EXIT_FAILURE);
-        // }
-
-        // close(fd);
     }
 }

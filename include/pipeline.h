@@ -1,7 +1,13 @@
 #ifndef PIPELINE_H_
 #define PIPELINE_H_
 
+#include <sys/time.h>
 #include "sync_queue.h"
+
+#define TIMER_DECLARE(n) struct timeval b##n,e##n
+#define TIMER_BEGIN(n) gettimeofday(&b##n, NULL)
+#define TIMER_END(n,t) gettimeofday(&e##n, NULL); \
+    (t)+=e##n.tv_usec-b##n.tv_usec+1000000*(e##n.tv_sec-b##n.tv_sec)
 
 /*
  * CHUNK_FILE_START NORMAL_CHUNK... CHUNK_FILE_END

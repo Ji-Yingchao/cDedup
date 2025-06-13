@@ -23,7 +23,7 @@ string ContainerCache::getChunkData(ENTRY_VALUE ev){
 }
 
 void ContainerCache::loadContainer(uint32_t container_index, CONTAINER_TYPE container_type){
-    //struct timeval start1, end1,start2, end2;
+    struct timeval start1, end1,start2, end2;
     ContainerKey key = {container_type, container_index};
     this->container_index_queue.push(key);
     this->container_index_set.insert(key);
@@ -42,11 +42,14 @@ void ContainerCache::loadContainer(uint32_t container_index, CONTAINER_TYPE cont
     }
 
     memset(this->container_buf, 0, CONTAINER_SIZE);
-    //gettimeofday(&start2, NULL);
+
+    gettimeofday(&start2, NULL);
+
     int n = read(fd, this->container_buf, CONTAINER_SIZE); // 可能塞不满
-    //gettimeofday(&end2, NULL);
-    //double tmp = (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
-    //this->total_time2 += (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
+
+    gettimeofday(&end2, NULL);
+    double tmp = (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
+    this->total_time2 += tmp;
 
     string content(this->container_buf , n);
 
@@ -136,4 +139,5 @@ void ContainerCache::printContainers(int base_container_max_value){
     // auto [r_base_counter, r_delta_container] = this->countBaseAndDelta(base_container_max_value);
     // printf("Reference Base Container Count: %d\n", r_base_counter);
     // printf("Reference Delta Container Count: %d\n", r_delta_container);
+    printf("Read Chunk Time: %.6f\n",    this->total_time2/1000000);
 }

@@ -107,7 +107,7 @@ static void* fifo_restore_thread(void *arg) {
 		free_chunk(temp);
 	}
 
-	jcr.read_container_num = cc->getReferenceContainerCount();
+	jcr.read_container_num = ((ContainerCache*)cc)->getReferenceContainerCount();
 	sync_queue_term(restore_chunk_queue);
 	return NULL;
 }

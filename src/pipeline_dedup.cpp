@@ -7,7 +7,9 @@
 #include <regex>
 #include <experimental/filesystem>
 
+
 static pthread_t dedup_t;
+pthread_mutex_t mutex;
 static std::vector<std::string> file_recipe; // 保存这个文件所有块的指纹
 
 static string containers_path;
@@ -93,36 +95,68 @@ void *dedup_thread(void *arg) {
 
 	struct ENTRY_VALUE entry_value;
 	
-	//deltaDedup只实现了固定base
-	bool dd = Config::getInstance().getDedupMethod() != DEDUP_GLOBAL;
+	// delta重删
+	DEDUP_METHOD dedupMethod = Config::getInstance().getDedupMethod();
     uint32_t current_version = getVersion(Config::getInstance().getFileRecipesPath().c_str(), "recipe");
-    uint32_t base_size = Config::getInstance().getBaseSize();
-    uint32_t delta_num = Config::getInstance().getDeltaNum();
-	uint32_t min_destination_base = current_version -  current_version % (base_size + delta_num);
-	bool in_delta = (current_version % (base_size + delta_num)) > (base_size-1);
-	uint32_t min_dr = Config::getInstance().getMinDR();
+    FILE_ATTR file_attr = ATTR_BASE;
+    if(dedupMethod == DEDUP_INTERVAL){
+        uint32_t base_size = Config::getInstance().getBaseSize();
+        uint32_t delta_num = Config::getInstance().getDeltaNum();
+        file_attr = (current_version % (base_size + delta_num)) > (base_size-1) ? ATTR_DELTA:ATTR_BASE;
 
-	if(current_version != 0){
-		if(!dd){
-			GlobalMetadataManagerPtr->load();
-		}else if(dd && in_delta){
-			GlobalMetadataManagerPtr->loadVersion(current_version-1,false);
-		}
-	}
+        uint32_t min_destination_base = current_version -  current_version % (base_size + delta_num);
+        if(current_version == min_destination_base + delta_num)
+            GlobalMetadataManagerPtr->clear_base();
+    }
+    else if(dedupMethod == DEDUP_AUTOMATIC && current_version != 0){    //版本0,初始值满足动态要求
+        uint32_t min_dr = Config::getInstance().getMinDR(); 
+        auto [attr, dr] = loadDedupRatioAtLine(current_version-1);
+        bool clear_base = dr < (double)min_dr/100 && attr == ATTR_DELTA;
+        if(clear_base)
+            GlobalMetadataManagerPtr->clear_base();
+
+        //清除base的fp后，下一个必是base
+        file_attr = clear_base ? ATTR_BASE : ATTR_DELTA;
+    }
+    else if(dedupMethod == DEDUP_MANUAL){
+        vector<FILE_ATTR> attrs = loadDeltaAttrs();
+        file_attr = attrs.at(current_version);
+
+        // TODO: 如果有多个small base，也需要清除之前的sbase，但是base和sbase混用
+        if(current_version+1 < attrs.size() && attrs.at(current_version+1) == ATTR_BASE)
+            GlobalMetadataManagerPtr->clear_base();
+    }
+
+    
+    // load metadata
+    if(current_version != 0){
+        if(dedupMethod == DEDUP_GLOBAL){
+            GlobalMetadataManagerPtr->load();
+        }
+        else if(file_attr != ATTR_BASE){
+            GlobalMetadataManagerPtr->loadVersion(current_version-1,false);
+        }
+    }
 
     while (1) {
-		struct chunk *c = NULL;
-		c = (struct chunk *)sync_queue_pop(hash_queue);
+		struct chunk *c = (struct chunk *)sync_queue_pop(hash_queue);
+
+        if (c == NULL)
+			break;
 
 		if (CHECK_CHUNK(c, CHUNK_FILE_START)) {
+            free_chunk(c);
 			continue;
 		}
 
-		if (CHECK_CHUNK(c, CHUNK_FILE_END))
-			break;
-		
-		if (c == NULL)
-			break;
+		if (CHECK_CHUNK(c, CHUNK_FILE_END)){
+            free_chunk(c);
+            break;
+        }
+        
+        TIMER_DECLARE(1);
+        TIMER_BEGIN(1);
+        pthread_mutex_lock(&mutex);
 
 		// Insert fingerprint into file recipe
         file_recipe.push_back(std::string((char*)&c->fp, sizeof(fingerprint)));
@@ -132,12 +166,14 @@ void *dedup_thread(void *arg) {
 		// lookup fingerprint
 		SHA1FP sha1_fp;
 		memcpy(&sha1_fp, c->fp, 20);
+
 		LookupResult lookup_result;
-		if(dd)
-			lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp, in_delta); 
-		else
+		if(dedupMethod == DEDUP_GLOBAL)
 			lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp);
+		else
+			lookup_result = GlobalMetadataManagerPtr->dedupLookup(sha1_fp, file_attr); 
         
+		TIMER_END(1, jcr.dedup_time);
 
 		if(lookup_result == Unique){
 			jcr.unique_chunk_num += 1;
@@ -145,7 +181,11 @@ void *dedup_thread(void *arg) {
 
 			if(container_inner_offset + c->size >= CONTAINER_SIZE){
 				// flush container
+				TIMER_DECLARE(1);
+		        TIMER_BEGIN(1);
 				saveContainerBuf();
+				TIMER_END(1, jcr.write_time);
+
 				resetContainerBuf();
 			}
 
@@ -158,25 +198,31 @@ void *dedup_thread(void *arg) {
 			entry_value.chunk_length = c->size;
 			entry_value.container_inner_index = container_inner_index;
 			entry_value.ref_cnt = 1;
-			if(dd){
-				GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value, in_delta);
-			}else{
+			if(dedupMethod == DEDUP_GLOBAL){
 				GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value);
+			}else{
+				GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value, file_attr);
+				
+				// TODO: log container sequence
 			}
 
 			// container buf pointer
 			container_inner_offset += c->size;
 			container_inner_index ++;
+
 			
 		}else if(lookup_result == Dedup){
-			if(dd){
-				GlobalMetadataManagerPtr->addRefCnt(sha1_fp, in_delta);
-			}else{
+			if(dedupMethod == DEDUP_GLOBAL){
 				GlobalMetadataManagerPtr->addRefCnt(sha1_fp);
+			}else{
+				entry_value = GlobalMetadataManagerPtr->addRefCntgetEntry(sha1_fp, file_attr);
+				
+				// TODO：log container sequence 
 			}
-		}else{
-			;
 		}
+
+        free_chunk(c);
+        pthread_mutex_unlock(&mutex);
     }
 
 	if(container_inner_offset > 0)
@@ -187,34 +233,24 @@ void *dedup_thread(void *arg) {
 	double cur_dr = double(jcr.data_size-jcr.unique_data_size) / double(jcr.data_size);
 
     // save metadata entry
-    GlobalMetadataManagerPtr->save();
-	// if(dd){
-    //     GlobalMetadataManagerPtr->save(current_version, delta_num, min_destination_base);
-    // }
-	
-	if(dd){
-        if(min_dr == 0){
-            if(current_version == min_destination_base)
-                in_delta = false;
-            else if(current_version <= min_destination_base + delta_num)
-                in_delta = true;
-            if(current_version == min_destination_base + delta_num)
-                clear_base_p = true;
-        }else if(min_dr > 0){
-            clear_base_p = (cur_dr < (double)min_dr/100) && in_delta;
-        }
-        GlobalMetadataManagerPtr->saveVersion(current_version, in_delta);
-		if(clear_base_p){
-			GlobalMetadataManagerPtr->clear_base();
-		}
+	if(dedupMethod == DEDUP_GLOBAL){
+        GlobalMetadataManagerPtr->save();
+    }else{
+        GlobalMetadataManagerPtr->saveVersion(current_version, file_attr);
+        // save dedup ratio and container index sequence
+        saveDedupRatio(file_attr,cur_dr);
     }
     
 	/* All files done */
+    pthread_mutex_lock(&jcr_status_mutex);
     jcr.status = JCR_STATUS_DONE;
+    pthread_mutex_unlock(&jcr_status_mutex);
     return NULL;
 }
 
 void start_dedup_phase() {
+    printf("Dedup Phase Start\n");
+    pthread_mutex_init(&mutex, NULL);
 	pthread_create(&dedup_t, NULL, dedup_thread, NULL);
 }
 

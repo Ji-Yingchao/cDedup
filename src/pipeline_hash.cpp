@@ -1,6 +1,7 @@
 #include "general.h"
 #include "config.h"
 #include "pipeline.h"
+#include "jcr.h"
 
 static pthread_t hash_t;
 
@@ -12,7 +13,9 @@ static void* sha1_thread(void* arg) {
 		struct chunk* c = (struct chunk*)sync_queue_pop(chunk_queue);
 
 		if (c == NULL) {
+			printf("hash_queue = %p\n", (void*)hash_queue);
 			sync_queue_term(hash_queue);
+			printf("hash_queue = %p\n", (void*)hash_queue);
 			break;
 		}
 
@@ -21,17 +24,27 @@ static void* sha1_thread(void* arg) {
 			continue;
 		}
 
+		TIMER_DECLARE(1);
+		TIMER_BEGIN(1);
+
         SHA_CTX ctx;
 		SHA1_Init(&ctx);
 		SHA1_Update(&ctx, c->data, c->size);
 		SHA1_Final(c->fp, &ctx);
 
+		TIMER_END(1, jcr.hash_time);
+		
+		assert(hash_queue != nullptr);
         sync_queue_push(hash_queue, c);
     }
+	return NULL;
 }
 
 void start_hash_phase() {
 	hash_queue = sync_queue_new(200);
+	assert(hash_queue != NULL);
+    assert(hash_queue->queue != NULL);
+	printf("Hash Phase Start\n");
 	pthread_create(&hash_t, NULL, sha1_thread, NULL);
 }
 

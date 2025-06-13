@@ -42,8 +42,6 @@ do
     mv ../conf/temp.json ../conf/readExample.json
     jq ".RestoreVersion = ${i}" ../conf/readExample.json > ../conf/temp.json 
     mv ../conf/temp.json ../conf/readExample.json
-    ../cDedup ../conf/readExample.json > /dev/null 2>&1 
-    ../cDedup ../conf/readExample.json > /dev/null 2>&1 
     ../cDedup ../conf/readExample.json | grep -E "Read Container Count|Restore Throughput|Read Amplification" | awk '
     /Read Container Count/ {read_counter = $4}
     /Restore Throughput/ {speed = $3}

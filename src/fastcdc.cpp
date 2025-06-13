@@ -169,6 +169,8 @@ void fastCDC_init(int fas, int NC_level) {
 
     MinSize = fas / 4;
     MaxSize = fas * 4;
+    // MinSize = fas / 8;
+    // MaxSize = fas * 16;
     fastcdc_avg_size = fas;
 
     if(NC_level == 1){

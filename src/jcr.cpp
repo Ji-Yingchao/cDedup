@@ -8,6 +8,8 @@
 #include "general.h"
 
 struct jcr jcr;
+pthread_mutex_t jcr_status_mutex;
+
 
 void init_jcr() {
 	jcr.status = JCR_STATUS_INIT;
@@ -19,6 +21,19 @@ void init_jcr() {
 
 	jcr.total_time = 0;
 	jcr.read_container_num = 0;
+
+	/*
+	 * the time consuming of backup phase
+	 */
+	jcr.read_time = 0;
+	jcr.chunk_time = 0;
+	jcr.hash_time = 0;
+	jcr.dedup_time = 0;
+	// jcr.rewrite_time = 0;
+	// jcr.filter_time = 0;
+	jcr.write_time = 0;
+
+	pthread_mutex_init(&jcr_status_mutex, NULL);
 }
 
 void init_backup_jcr() {
@@ -30,16 +45,29 @@ void show_backup_jcr(){
 	printf("========= backup end =========\n");
 	printf("Throughput %.2f MiB/s\n", throughput);
     printf("Dedup Ratio %.2f\n", double(jcr.data_size - jcr.unique_data_size) / double(jcr.data_size) *100);
+	printf("total time(s): %.3f\n", jcr.total_time / 1000000);
+	printf("data_size %.2f\n", (double)jcr.data_size / 1024 / 1024);
 	printf("chunk_num %d\n", jcr.chunk_num);
 	printf("unique_chunk_num %d\n", jcr.unique_chunk_num);
-	printf("data_size %d\n", jcr.data_size);
-	printf("unique_data_size %d\n", jcr.unique_data_size);
-	printf("dedup_data_size %d\n", jcr.data_size - jcr.unique_data_size);
+	printf("data_size %ld\n", jcr.data_size);
+	printf("unique_data_size %ld\n", jcr.unique_data_size);
+	printf("dedup_data_size %ld\n", jcr.data_size - jcr.unique_data_size);
+
+	printf("read_time : %.3fs, %.2fMB/s\n", jcr.read_time / 1000000,
+			jcr.data_size * 1000000.0 / jcr.read_time / 1024 / 1024);
+	printf("chunk_time : %.3fs, %.2fMB/s\n", jcr.chunk_time / 1000000,
+			jcr.data_size * 1000000.0 / jcr.chunk_time / 1024 / 1024);
+	printf("hash_time : %.3fs, %.2fMB/s\n", jcr.hash_time / 1000000,
+			jcr.data_size * 1000000.0 / jcr.hash_time / 1024 / 1024);
+	printf("dedup_time : %.3fs, %.2fMB/s\n",jcr.dedup_time / 1000000,
+			jcr.data_size * 1000000.0 / jcr.dedup_time / 1024 / 1024);
+	printf("write_time : %.3fs, %.2fMB/s\n", jcr.write_time / 1000000,
+			jcr.data_size * 1000000.0 / jcr.write_time / 1024 / 1024);
 }
 
 void show_restore_jcr(){
 	printf("========= restore end =========\n");
-	printf("total size(B): %" PRId32 "\n", jcr.data_size);
+	printf("total size(B): %" PRId64 "\n", jcr.data_size);
 	printf("number of chunks: %" PRId32"\n", jcr.chunk_num);
 	printf("throughput(MB/s): %.2f\n",
 		(double) jcr.data_size * 1000000 / (1024 * 1024 * jcr.total_time));

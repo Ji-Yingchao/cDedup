@@ -24,13 +24,17 @@ static void read_file(char* path) {
 
 	sync_queue_push(read_queue, c);
 
+    TIMER_DECLARE(1);
+	TIMER_BEGIN(1);
 	int size = 0;
 
 	while ((size = fread(buf, 1, DEFAULT_BLOCK_SIZE, fp)) != 0) {
+		TIMER_END(1, jcr.read_time);
 		c = new_chunk(size);
 		memcpy(c->data, buf, size);
 
 		sync_queue_push(read_queue, c);
+		TIMER_BEGIN(1);
 	}
 
 	c = new_chunk(0);
@@ -51,6 +55,7 @@ void start_read_phase() {
     /* running job */
 	jcr.status = JCR_STATUS_RUNNING;
 	read_queue = sync_queue_new(20);
+	printf("Read Phase Start\n");
 	pthread_create(&read_t, NULL, read_thread, NULL);
 }
 
