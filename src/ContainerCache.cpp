@@ -6,7 +6,7 @@
 string ContainerCache::getChunkData(ENTRY_VALUE ev){
     ContainerKey key = {ev.container_type, ev.container_number};
 
-    //this->average_chunks[ev.container_type]++;
+    //this->average_chunks[ev.container_type]++;  
 
     auto numberIter = this->container_index_set.find(key);
     if(numberIter != this->container_index_set.end()){
@@ -17,22 +17,36 @@ string ContainerCache::getChunkData(ENTRY_VALUE ev){
         if(container_index_queue.size() >= this->cache_max_size){
             evictContainerFIFO();
         }
-        this->loadContainer(ev.container_number, ev.container_type);
+        this->loadContainer(key);
+
+        // 预取容器
+        // if(ev.container_type == HOT_CONTAINER){
+        //     for(uint32_t i = ev.container_number+1; i<= ev.container_number+16 && container_index_queue.size() < this->cache_max_size && i<=181; i++){
+        //         ContainerKey temp = {ev.container_type, i};
+        //         if(this->container_index_set.find(temp) == this->container_index_set.end()){
+        //             // if(container_index_queue.size() >= this->cache_max_size){
+        //             //     evictContainerFIFO();
+        //             // }
+        //             this->loadContainer(temp);
+        //         }
+        //     }
+        // }
+
         return string(cache[key], ev.offset, ev.chunk_length);
     }
 }
 
-void ContainerCache::loadContainer(uint32_t container_index, CONTAINER_TYPE container_type){
+void ContainerCache::loadContainer(ContainerKey key){
     struct timeval start1, end1,start2, end2;
-    ContainerKey key = {container_type, container_index};
     this->container_index_queue.push(key);
     this->container_index_set.insert(key);
     
     //只数容器数量，所以注释
     string container_path;
-    if(container_type == HOT_CONTAINER) container_path = this->hot_containers_path;
+    if(key.type == HOT_CONTAINER) container_path = this->hot_containers_path;
+    //if(key.containerId <= 181) container_path = this->hot_containers_path;
     else container_path = this->containers_path;
-    string container_name = container_path + "/" + container_type_to_string(container_type) + to_string(container_index);
+    string container_name = container_path + "/" + container_type_to_string(key.type) + to_string(key.containerId);
 
     int fd = open(container_name.data(), O_RDONLY | O_DIRECT);
     if (fd == -1) {
@@ -57,7 +71,7 @@ void ContainerCache::loadContainer(uint32_t container_index, CONTAINER_TYPE cont
     this->load_container_size += n;
 
     // 数容器数量
-    this->reference_containers[container_type].push_back(container_index);
+    this->reference_containers[key.type].push_back(key.containerId);
 
     close(fd);
 }
@@ -128,16 +142,16 @@ void ContainerCache::printContainers(int base_container_max_value){
     // 读取容器的次数
     int container_read_count = this->getReferenceContainerCount();
     printf("Read Container Count: %d\n", container_read_count);  //即Seek Number
-    // auto [base_counter, delta_container] = this->countBaseAndDelta(base_container_max_value);
-    // printf("Read Base Container Count: %d\n", base_counter);
-    // printf("Read Delta Container Count: %d\n", delta_container);
+    auto [base_counter, delta_container] = this->countBaseAndDelta(base_container_max_value);
+    printf("Read Base Container Count: %d\n", base_counter);
+    printf("Read Delta Container Count: %d\n", delta_container);
 
     // // 去重后是引用容器的个数
     this->removeDuplicates();
     int reference_containers_count = this->getReferenceContainerCount(); 
     printf("Reference Container Count: %d\n", reference_containers_count);
-    // auto [r_base_counter, r_delta_container] = this->countBaseAndDelta(base_container_max_value);
-    // printf("Reference Base Container Count: %d\n", r_base_counter);
-    // printf("Reference Delta Container Count: %d\n", r_delta_container);
+    auto [r_base_counter, r_delta_container] = this->countBaseAndDelta(base_container_max_value);
+    printf("Reference Base Container Count: %d\n", r_base_counter);
+    printf("Reference Delta Container Count: %d\n", r_delta_container);
     printf("Read Chunk Time: %.6f\n",    this->total_time2/1000000);
 }

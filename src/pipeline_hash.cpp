@@ -13,9 +13,7 @@ static void* sha1_thread(void* arg) {
 		struct chunk* c = (struct chunk*)sync_queue_pop(chunk_queue);
 
 		if (c == NULL) {
-			printf("hash_queue = %p\n", (void*)hash_queue);
 			sync_queue_term(hash_queue);
-			printf("hash_queue = %p\n", (void*)hash_queue);
 			break;
 		}
 
@@ -34,7 +32,6 @@ static void* sha1_thread(void* arg) {
 
 		TIMER_END(1, jcr.hash_time);
 		
-		assert(hash_queue != nullptr);
         sync_queue_push(hash_queue, c);
     }
 	return NULL;

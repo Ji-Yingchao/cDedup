@@ -8,7 +8,6 @@
 #include "general.h"
 
 struct jcr jcr;
-pthread_mutex_t jcr_status_mutex;
 
 
 void init_jcr() {
@@ -20,7 +19,6 @@ void init_jcr() {
 	jcr.unique_chunk_num = 0;
 
 	jcr.total_time = 0;
-	jcr.read_container_num = 0;
 
 	/*
 	 * the time consuming of backup phase
@@ -29,11 +27,17 @@ void init_jcr() {
 	jcr.chunk_time = 0;
 	jcr.hash_time = 0;
 	jcr.dedup_time = 0;
-	// jcr.rewrite_time = 0;
-	// jcr.filter_time = 0;
 	jcr.write_time = 0;
 
-	pthread_mutex_init(&jcr_status_mutex, NULL);
+	/*
+	 * the time consuming of three restore phase
+	 */
+	jcr.read_recipe_time = 0;
+	jcr.read_chunk_time = 0;
+	jcr.write_chunk_time = 0;
+
+	jcr.read_container_num = 0;
+	jcr.read_data_size = 0;
 }
 
 void init_backup_jcr() {
@@ -69,8 +73,21 @@ void show_restore_jcr(){
 	printf("========= restore end =========\n");
 	printf("total size(B): %" PRId64 "\n", jcr.data_size);
 	printf("number of chunks: %" PRId32"\n", jcr.chunk_num);
+	printf("total time(s): %.3f\n", jcr.total_time / 1000000);
 	printf("throughput(MB/s): %.2f\n",
 		(double) jcr.data_size * 1000000 / (1024 * 1024 * jcr.total_time));
 	printf("speed factor: %.2f\n",
 			jcr.data_size / (1024.0 * 1024 * jcr.read_container_num));
+	printf("seek number: %d\n", jcr.read_container_num);
+	printf("read amplification: %.2f\n", (1.0 * jcr.read_data_size)/jcr.data_size);
+
+	printf("read_recipe_time : %.3fs, %.2fMB/s\n",
+			jcr.read_recipe_time / 1000000,
+			jcr.data_size * 1000000 / jcr.read_recipe_time / 1024 / 1024);
+	printf("read_chunk_time : %.3fs, %.2fMB/s\n", jcr.read_chunk_time / 1000000,
+			jcr.data_size * 1000000 / jcr.read_chunk_time / 1024 / 1024);
+	printf("write_chunk_time : %.3fs, %.2fMB/s\n",
+			jcr.write_chunk_time / 1000000,
+			jcr.data_size * 1000000 / jcr.write_chunk_time / 1024 / 1024);
+
 }

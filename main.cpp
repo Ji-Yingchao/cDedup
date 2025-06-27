@@ -40,8 +40,8 @@
 namespace fs = experimental::filesystem;
 
 uint32_t rev_container_cnt = 0;
-unsigned char rev_container_buf[CONTAINER_SIZE]={0};
-unsigned char tmp_buf[CONTAINER_SIZE]={0};
+// unsigned char rev_container_buf[CONTAINER_SIZE]={0};
+// unsigned char tmp_buf[CONTAINER_SIZE]={0};
 
 char* global_stat_path = "/home/jyc/cDedup/global_stat.json";
 extern MetadataManager *GlobalMetadataManagerPtr;
@@ -70,7 +70,6 @@ void do_arrange(int current_version){
     auto [slbase_version, base_version] = findNearestBaseBefore(dr_vec, current_version);
     int arrange_version = base_version;
     int ref_count = current_version - arrange_version + 1; 
-    //int arrange_version = current_version-1;
     FILE_ATTR file_attr = dr_vec.at(arrange_version).attr;
     if(file_attr != ATTR_BASE) return ;
 
@@ -463,6 +462,10 @@ int main(int argc, char** argv){
     
     GlobalMetadataManagerPtr = new MetadataManager(Config::getInstance().getFingerprintsFilePath().c_str());
 
+    set_container_size(Config::getInstance().getContainerSize());
+
+    printf("容器大小为：%d MB\n", CONTAINER_SIZE/(1024*1024));
+
     // 不支持普通重删和DeltaDedup混合写入
     if(Config::getInstance().getTaskType() == TASK_WRITE){
         initChunkingAlgorithm();
@@ -489,60 +492,43 @@ int main(int argc, char** argv){
                                          backup_time_end.tv_usec - backup_time_start.tv_usec;
         float throughput = (float)(bj.sum_size) / MB / ((float)(single_dedup_time_us)/1000000);
 
-        // 写文件 - 重删统计 bj记录当前任务数据
-        //print_backup_job(bj);
-        printf("-----------------------statics----------------------\n");
-        printf("Throughput %.2f MiB/s\n",    throughput); 
-        //printf("Dedup Ratio %.2f%\n",     double(bj.dedup_size) / double(bj.sum_size) *100);
+        // 重删统计
+        print_backup_job(bj, throughput);
 
         // 保存全局信息
         GlobalStat::getInstance().update(bj.sum_size, bj.sum_size - bj.dedup_size);
         GlobalStat::getInstance().save_arguments(global_stat_path);
-        printf("Actual DR %.4f \n", double(bj.sum_size) / double(bj.sum_size - bj.dedup_size) );
 
     }
     else if(Config::getInstance().getTaskType() == TASK_WRITE_PIPELINE){
         init_backup_jcr();
 
+        TIMER_DECLARE(1);
+		TIMER_BEGIN(1);
         
-
-        struct timeval backup_time_start, backup_time_end;  
-        gettimeofday(&backup_time_start, NULL);
-        
-
         start_read_phase();
         start_chunk_phase();
         start_hash_phase();
         start_dedup_phase();
-        // do{
-        //     sleep(1);
-        // }while(jcr.status == JCR_STATUS_RUNNING || jcr.status != JCR_STATUS_DONE);
         do{
-            pthread_mutex_lock(&jcr_status_mutex);
-            int status = jcr.status;
-            pthread_mutex_unlock(&jcr_status_mutex);
-
-            if (status != JCR_STATUS_RUNNING)
-                break;
-
             sleep(1);
-        }while(true);
+        }while(jcr.status == JCR_STATUS_RUNNING || jcr.status != JCR_STATUS_DONE);
 
         stop_read_phase();
         stop_chunk_phase();
         stop_hash_phase();
         stop_dedup_phase();
 
-        gettimeofday(&backup_time_end, NULL);
-        jcr.total_time = (backup_time_end.tv_sec - backup_time_start.tv_sec) * 1000000 + 
-                                          backup_time_end.tv_usec - backup_time_start.tv_usec;
-        // printf("throughput(MB/s): %.2f\n",
-		// 	(double) jcr.data_size * 1000000 / (1024 * 1024 * jcr.total_time));
+        TIMER_END(1, jcr.total_time);
+
         show_backup_jcr();
 
         //保留固定的版本数量
         uint32_t current_version = getVersion(Config::getInstance().getFileRecipesPath().c_str(), "recipe");
         do_delete(current_version);
+    }
+    else if(Config::getInstance().getTaskType() == TASK_RESTORE_PIPELINE){
+        do_restore();
     }
     else if(Config::getInstance().getTaskType() == TASK_RESTORE){
         // 如果写时使用DeltaDedup，那么恢复时参数也需要指定DeltaDedup
@@ -560,12 +546,9 @@ int main(int argc, char** argv){
         int base_container_max_value = GlobalMetadataManagerPtr->getBaseContainerMaxValue();
         printf("Base Container Max Value: %d\n", base_container_max_value);
 
-
         struct timeval restore_time_start, restore_time_end;
         gettimeofday(&restore_time_start, NULL);
 
-        // unsigned char* assembling_buffer;
-        // posix_memalign((void**)&assembling_buffer, SECTOR_SIZE, FILE_CACHE);
         unsigned char* assembling_buffer = (unsigned char*)malloc(FILE_CACHE);
         memset(assembling_buffer, 0, FILE_CACHE);
         int write_buffer_offset = 0;
@@ -579,15 +562,12 @@ int main(int argc, char** argv){
         //组装
         RESTORE_METHOD rm = Config::getInstance().getRestoreMethod();
         if(rm == CONTAINER_CACHE || rm == CHUNK_CACHE || rm == INDENPENDENT_CACHE || rm == OPTIMAL_CACHE){
-            // int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT| O_DIRECT, 0777);
             int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT, 0777);
             if(fd < 0){
                 printf("无法写文件!!! %s\n", strerror(errno));
                 exit(-1);
             }
 
-            double total_time1 = 0.0, total_time2 = 0.0, total_time3 = 0.0;
-            struct timeval start1, end1,start2, end2;
             Cache* cc;
             if(rm == CONTAINER_CACHE){
                 cc = new ContainerCache(Config::getInstance().getContainersPath().c_str(), Config::getInstance().getCacheSize());
@@ -600,24 +580,17 @@ int main(int argc, char** argv){
                 vector<ContainerKey> keys = loadContainerIds(restore_version);
                 ((OptimalCache*)cc)->initializeAccessSequence(keys);
             }
-            
 
             SHA1FP fp;
             ENTRY_VALUE ev;
             for(auto &x : file_recipe){
                 memcpy(&fp, x.data(), sizeof(SHA1FP));
                 ev = GlobalMetadataManagerPtr->getEntry(fp);
-                gettimeofday(&start2, NULL);
                 string ck_data = cc->getChunkData(ev);
-                //printf("%s\n", ck_data.c_str());
-
-                gettimeofday(&end2, NULL);
-                total_time2 += (end2.tv_sec - start2.tv_sec) * 1000000 + end2.tv_usec - start2.tv_usec;
                 
                 // 仅数容器数量，先注释掉
                 if(write_buffer_offset + ck_data.size() >= FILE_CACHE){
                     flushAssemblingBuffer(fd, assembling_buffer, write_buffer_offset);
-                    //flushAssemblingBuffer(fd, assembling_buffer, FILE_CACHE);
                     write_buffer_offset = 0;
                 }
                 memcpy(assembling_buffer + write_buffer_offset, ck_data.data(), ck_data.size());
@@ -641,7 +614,6 @@ int main(int argc, char** argv){
                 container_read_count = ((OptimalCache*)cc)->getReferenceContainerCount();
                ((OptimalCache*)cc)->printContainers(base_container_max_value);
             }
-            
 
         }else if(Config::getInstance().getRestoreMethod() == FAA_FIXED){
             int fd = open(Config::getInstance().getRestorePath().c_str(), O_RDWR | O_CREAT, 0777);
@@ -726,7 +698,6 @@ int main(int argc, char** argv){
         printf("Restore Throughput %.2f MiB/s\n", restore_throughput);
         printf("Speed factor %.2f\n", speed_factor);
         printf("Read Amplification %.2f\n", read_amplification);
-        
         
     }else if(Config::getInstance().getTaskType() == TASK_DELETE){
         // 仅实现固定DeltaDedup的删除

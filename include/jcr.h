@@ -35,18 +35,17 @@ struct jcr{
 	double write_time;
 
 	/*
-	 * the time consuming of five dedup phase
+	 * the time consuming of three restore phase
 	 */
 	double read_recipe_time;
 	double read_chunk_time;
 	double write_chunk_time;
 
 	int read_container_num;
+	int64_t read_data_size;
 };
 
 extern struct jcr jcr;
-
-extern pthread_mutex_t jcr_status_mutex;
 
 void init_jcr();
 void init_backup_jcr();

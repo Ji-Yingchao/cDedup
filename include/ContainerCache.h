@@ -41,12 +41,12 @@ class ContainerCache : public Cache{
 
         string hot_containers_path;
 
-        void loadContainer(uint32_t container_number, CONTAINER_TYPE container_type);
+        void loadContainer(ContainerKey key);
         void evictContainerFIFO();
 
         // 恢复时引用的容器
         unordered_map<CONTAINER_TYPE, vector<int>> reference_containers; 
-        unordered_map<CONTAINER_TYPE, int>  average_chunks;
+        unordered_map<CONTAINER_TYPE, int>  average_chunks;    // 统计每个类型的容器中的chunk引用次数
         uint64_t load_container_size;  
 
         void removeDuplicates();

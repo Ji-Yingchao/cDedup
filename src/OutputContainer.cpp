@@ -101,7 +101,7 @@ void OutputContainer::saveContainer(int container_index, unsigned char* containe
         exit(-1);
     }
 
-    // 确保数据真正落盘
+    // 确保数据真正落盘，加快恢复速度
     // if (fsync(fd) == -1) {
     //     printf("fsync error: %s\n", strerror(errno));
     //     close(fd);

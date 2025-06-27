@@ -3,6 +3,13 @@
 #include <fstream>
 
 
+int CONTAINER_SIZE = 4 * 1024 * 1024;  // 默认值
+
+void set_container_size(int size) {
+    CONTAINER_SIZE = size;
+}
+
+
 std::string container_type_to_string(CONTAINER_TYPE type) {
     switch (type) {
         case HOT_CONTAINER: return "hot_container";

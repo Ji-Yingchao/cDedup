@@ -9,10 +9,10 @@
 
 
 static pthread_t dedup_t;
-pthread_mutex_t mutex;
 static std::vector<std::string> file_recipe; // 保存这个文件所有块的指纹
 
 static string containers_path;
+//static string container_type;
 static unsigned char* container_buf = NULL;
 static uint32_t container_index = 0;
 static uint32_t container_inner_offset = 0;
@@ -156,7 +156,6 @@ void *dedup_thread(void *arg) {
         
         TIMER_DECLARE(1);
         TIMER_BEGIN(1);
-        pthread_mutex_lock(&mutex);
 
 		// Insert fingerprint into file recipe
         file_recipe.push_back(std::string((char*)&c->fp, sizeof(fingerprint)));
@@ -198,11 +197,12 @@ void *dedup_thread(void *arg) {
 			entry_value.chunk_length = c->size;
 			entry_value.container_inner_index = container_inner_index;
 			entry_value.ref_cnt = 1;
+            // entry_value.container_type = CONTAINER;  // 注释掉更快
+            // entry_value.is_arranged = false;
 			if(dedupMethod == DEDUP_GLOBAL){
 				GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value);
 			}else{
 				GlobalMetadataManagerPtr->addNewEntry(sha1_fp, entry_value, file_attr);
-				
 				// TODO: log container sequence
 			}
 
@@ -216,13 +216,11 @@ void *dedup_thread(void *arg) {
 				GlobalMetadataManagerPtr->addRefCnt(sha1_fp);
 			}else{
 				entry_value = GlobalMetadataManagerPtr->addRefCntgetEntry(sha1_fp, file_attr);
-				
 				// TODO：log container sequence 
 			}
 		}
 
         free_chunk(c);
-        pthread_mutex_unlock(&mutex);
     }
 
 	if(container_inner_offset > 0)
@@ -242,15 +240,13 @@ void *dedup_thread(void *arg) {
     }
     
 	/* All files done */
-    pthread_mutex_lock(&jcr_status_mutex);
     jcr.status = JCR_STATUS_DONE;
-    pthread_mutex_unlock(&jcr_status_mutex);
     return NULL;
 }
 
 void start_dedup_phase() {
     printf("Dedup Phase Start\n");
-    pthread_mutex_init(&mutex, NULL);
+    //pthread_mutex_init(&mutex, NULL);
 	pthread_create(&dedup_t, NULL, dedup_thread, NULL);
 }
 

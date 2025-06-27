@@ -5,6 +5,10 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+//fread速度
+// dd if=/home/jyc/hdd/dataset/linux/linux-5.10.100.tar of=/dev/null bs=4M iflag=direct
+// sudo hdparm -Tt /dev/sda
+
 void test_read_performance(const char* filename, size_t buffer_size) {
     int fd = open(filename, O_RDONLY | O_DIRECT);
     if (fd == -1) {
@@ -96,10 +100,10 @@ void test_write_performance(const char* filename, size_t buffer_size, size_t fil
 int main() {
     // /home/jyc/ssd/dataset/linuxVersion/linux-5.10.100.tar
     // /home/jyc/ssd/restore/test_write.dat
-    // /home/jyc/hdd/data/linux-5.10.100.tar
-    // /home/jyc/hdd/restore/test_write.dat
-    const char* read_filename = "/home/jyc/hdd/data/linux-5.10.100.tar"; // 要读取的文件
-    const char* write_filename = "/home/jyc/hdd/restore/test_write.dat";    // 要写入的文件
+    // /home/jyc/hdd/dataset/linux/linux-5.10.100.tar
+    // /home/jyc/hdd/test_write.dat
+    const char* read_filename = "/home/jyc/hdd/dataset/linux/linux-5.10.100.tar"; // 要读取的文件
+    const char* write_filename = "/home/jyc/hdd/test_write.dat";    // 要写入的文件
     const size_t buffer_size = 30 * 4 * 1024 * 1024;                            // 30*4MB的缓冲区
     const size_t file_size_mb = 1024;                                           // 写入文件大小 (MB)
 

@@ -6,6 +6,9 @@
 #include <sstream>
 #include <vector>
 
+extern int CONTAINER_SIZE;
+
+void set_container_size(int size); 
 
 /** 容器类型 */
 enum CONTAINER_TYPE{

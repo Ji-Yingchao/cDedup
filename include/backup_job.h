@@ -17,6 +17,6 @@ struct backup_job{
 // 声明全局变量（定义放在 backup_job.cpp）
 extern backup_job bj;
 
-void print_backup_job(const backup_job& job);
+void print_backup_job(const backup_job& job, float throughput);
 
 #endif // BACKUP_JOB_H

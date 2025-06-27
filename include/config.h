@@ -7,6 +7,7 @@ using namespace std;
 
 enum TASK_TYPE{
     TASK_RESTORE,
+    TASK_RESTORE_PIPELINE,
     TASK_WRITE,
     TASK_WRITE_PIPELINE,
     TASK_DELETE,
@@ -61,6 +62,7 @@ class Config{
         bool getArranged(){return this->arranged;}
         enum RESTORE_METHOD getRestoreMethod(){return this->rm;}
         int getCacheSize(){return this->cache_size;}
+        int getContainerSize(){return this->container_size;}
 
         string getFpDeltaDedupFolderPath(){return this->fp_DeltaDedup_folder_path;}
         string getFingerprintsFilePath(){return this->fingerprints_file_path;}
@@ -102,6 +104,7 @@ class Config{
         void setArranged(char* s){this->arranged = yesNoTrans(s);}
         void setRestoreMethod(char* s){this->rm = restoreMethodTrans(s);}
         void setCacheSize(int n){this->cache_size = n;}
+        void setContainerSize(char* s){this->container_size = parse_size_string(s);}
 
         void setFpDeltaDedupFolder(char* s){this->fp_DeltaDedup_folder_path = s;}
         void setFingerprintsFilePath(char* s){this->fingerprints_file_path = s;}
@@ -180,6 +183,8 @@ class Config{
                     Config::getInstance().setRestoreMethod(valuestring);
                 }else if (strcmp(name, "cache_size") == 0) {
                     Config::getInstance().setCacheSize(val_int);
+                }else if (strcmp(name, "container_size") == 0) {
+                    Config::getInstance().setContainerSize(valuestring);
                 }
                 //2. metadata configurations
                 else if (strcmp(name, "fingerprintsDeltaDedupFolder") == 0) {
@@ -248,6 +253,7 @@ class Config{
         int normal_level;
         bool merkle_tree;
         int cache_size;
+        int container_size;
         int delete_version;     // used for delete
 
         // 元数据相关参数
@@ -265,9 +271,9 @@ class Config{
         int delta_num;
         int min_dr;       // DEDUP_AUTOMATIC参数 
         int sml_dr;
-        string dedup_ratio_file_path;   // 写入历史版本的属性和重删率
-        string delta_config_file_path;  // DEDUP_MANUAL参数   delta或base的设置文件路径
-        string container_index_path;  //引用的容器顺序
+        string dedup_ratio_file_path;   // 写入各备份版本的属性和重删率
+        string delta_config_file_path;  // DEDUP_MANUAL参数   delta或base配置文件路径
+        string container_index_path;  // optimalCache参数 引用的容器顺序
         string hot_containers_path;  //重排的容器路径
         bool arranged;   //是否重排
 
@@ -288,6 +294,8 @@ class Config{
                 return TASK_WRITE_PIPELINE;
             }else if (strcmp(s, "restore") == 0){
                 return TASK_RESTORE;
+            }else if (strcmp(s, "restore_pipeline") == 0){
+                return TASK_RESTORE_PIPELINE;
             }else if (strcmp(s, "delete") == 0){
                 return TASK_DELETE;
             }else{
@@ -355,5 +363,23 @@ class Config{
                 exit(-1);
             }
         }
+
+        int parse_size_string(const char* str) {
+            int num = 0;
+            if (strstr(str, "KB")) {
+                sscanf(str, "%d", &num);
+                return num * 1024;
+            } else if (strstr(str, "MB")) {
+                sscanf(str, "%d", &num);
+                return num * 1024 * 1024;
+            } else if (strstr(str, "GB")) {
+                sscanf(str, "%d", &num);
+                return num * 1024 * 1024 * 1024;
+            } else {
+                sscanf(str, "%d", &num);
+                return num;
+            }
+        }
+
 };
 #endif

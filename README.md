@@ -9,18 +9,18 @@ stdbuf -oL ./cDedup conf/writeExample.json | grep -oP 'Actual DR \K[\d.]+'
 stdbuf -oL ./cDedup conf/writeExample.json | grep -oP 'Dedup Ratio \K[\d.]+'  
 ./batchrun.sh > results.txt
 
- global interval automatic manual
+global interval automatic manual
+write_pipeline
 
 ## 测试恢复吞吐量
 ./cDedup conf/readExample.json
 ./batchread.sh > results.txt
 
-independent container
+independent container 
 
 ## 数据集
-folder_path="/home/cyf/ssd0/SFD_TAR/"
+folder_path="/home/jyc/ssd/dataset/Linux/"
 folder_path="/home/jyc/ssd/dataset/CHM/"
-
 folder_path="/home/jyc/ssd/dataset/LLVM/"
 files=$(ls $folder_path | sort -V)
 
@@ -36,11 +36,11 @@ sudo chown $USER:$USER conf/writeExample.json
 sort -n input.txt -o output.txt
 
 ## 清除缓存
-sudo echo 3 > /proc/sys/vm/drop_caches
+sync && echo 3 > /proc/sys/vm/drop_caches
 rm -rf ~/.vscode-server/data/User/History/*
+ls -1 /path/dir | wc -l
 
 /home/jyc/ssd/dataset/LLVM/llvmorg-12.0.0-rc1.tar
 /home/jyc/ssd/dataset/CHM/chromium_81.0.4044.103.tar
-
-gdb --args ./cDedup conf/writeExample.json
+/home/jyc/ssd/dataset/Linux/v6.0-rc1.tar
 

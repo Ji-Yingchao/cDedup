@@ -7,26 +7,13 @@ do
     full_path=$folder_path$new_file_path
     jq --arg full_path "$full_path" '.InputFile = $full_path' ../conf/writeExample.json > ../conf/temp.json
     mv ../conf/temp.json ../conf/writeExample.json
-    # ../cDedup ../conf/writeExample.json | grep "throughput(MB/s)" | awk '{print $2}'
-    # ../cDedup ../conf/writeExample.json | grep "Dedup Ratio" | awk '{print $3}'
-    ../cDedup ../conf/writeExample.json | grep "Actual DR" | awk '{print $3}' 
+    ../cDedup ../conf/writeExample.json | grep "Throughput" | awk '{print $2}' >> results.txt
+    sleep 5
 
     # ((count++))       
-    # if [ "$count" -eq 5 ]; then  
+    # if [ "$count" -eq 90 ]; then  
     #     echo "到第十次了，跳出循环"
     #     break
     # fi
 
 done
-
-# 多值筛选输出
-# ../cDedup ../conf/writeExample.json | grep -E "metadata table load|New added item|total item" | awk '
-    # /metadata table load/ {load_item = $4}
-    # /New added item/ {new_added = $4}
-    # /total item/ {total_item = $3}
-    # END {print load_item "\t" new_added "\t" total_item}'
-
-    # ./cDedup ./conf/writeExample.json | grep -E "Actual DR|throughput" | awk '
-    # /Actual DR/ {dr = $3}
-    # /throughput/ {speed = $2}
-    # END {print dr "\t" speed}' > results.txt
